@@ -16,6 +16,10 @@
             pkgs.pkg-config
             pkgs.openssl
           ];
+
+        shellHook = ''
+            zsh
+          '';
       };
   };
 }

@@ -5,7 +5,7 @@ use std::{process::Command, thread, time::Duration};
 
 const BASE_URL: &str = "https://lrclib.net/api/search";
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 struct Metadata {
     title: String,
     artist: String,
@@ -18,13 +18,20 @@ impl PartialEq for Metadata {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct LyricObject {
     metadata: Metadata,
     lyrics: Vec<(f32, String)>,
 }
 
 impl LyricObject {
+    fn with_metadata(metadata: Metadata) -> Self {
+        Self {
+            metadata,
+            lyrics: vec![],
+        }
+    }
+
     async fn from_metadata(metadata: Metadata) -> Option<Self> {
         let request = format!(
             "{}?track_name={}&artist_name={}&album_name={}", 
@@ -95,19 +102,25 @@ fn get_position() -> f32 {
     command("playerctl position")
         .trim()
         .parse()
-        .expect("Command returned with non-float answer")
+        .unwrap_or(0.)
+        // .expect("Command returned with non-float answer")
 }
 
-fn get_metadata() -> Metadata {
+fn get_metadata() -> Option<Metadata> {
     let title = command("playerctl metadata title").trim().to_string();
     let artist = command("playerctl metadata artist").trim().to_string();
     let album = command("playerctl metadata album").trim().to_string();
 
-    Metadata {
+    // No title and artist means not searchable
+    if title.is_empty() && artist.is_empty() {
+        return None;
+    }
+
+    Some(Metadata {
         title,
         artist,
         album,
-    }
+    })
 }
 
 fn get_time_from_string(time_string: impl ToString) -> Option<f32> {
@@ -124,30 +137,51 @@ fn get_time_from_string(time_string: impl ToString) -> Option<f32> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let metadata = get_metadata();
+    // let mut metadata: Option<Metadata> = None;
+    let mut lyrics: Option<LyricObject> = None;
 
-    let mut lyrics = LyricObject::from_metadata(metadata).await.ok_or(anyhow::Error::msg("Couldn't find song"))?;
-
-    eprintln!("Starting loop...");
     let mut prev_index = usize::MAX;
     loop {
-        let current_metadata = get_metadata();
-        if current_metadata != lyrics.metadata {
-            eprintln!("New song detected, loading lyrics");
-            lyrics = LyricObject::from_metadata(current_metadata).await.ok_or(anyhow::Error::msg("Couldn't find song"))?;
+        thread::sleep(Duration::from_secs_f32(0.1));
+
+        let metadata = get_metadata();
+        if match (&metadata, &lyrics) {
+            // True if metadata and lyrics exist and are different
+            // e.g. changing songs
+            (Some(metadata), Some(lyrics)) => metadata != &lyrics.metadata,
+            // True if lyrics exist but metadata doesn't
+            // e.g. no more songs
+            (None, Some(_)) => true,
+            // True if metadata exists but lyrics don't
+            // e.g. just started playing
+            (Some(_), None) => true,
+            // Else false
+            // e.g. still playing same song
+            _ => false,
+        } {
+            // Switch lyrics object to be with new metadata, or no metadata.
+            lyrics = match &metadata {
+                Some(metadata) => match LyricObject::from_metadata(metadata.clone()).await {
+                    // Just return it if it exists
+                    Some(lyrics) => Some(lyrics),
+                    // Return an empty lyrics object if not
+                    None => Some(LyricObject::with_metadata(metadata.clone()))
+                },
+                None => None,
+            }
         }
 
-        let (index, line) = lyrics.get_line_at_time(get_position());
-        if index != prev_index {
-            if matches!(is_japanese(&line), IsJapanese::True) {
-                let conversion = kakasi::convert(&line);
-                println!("{}", conversion.romaji)
-            } else {
-                println!("{}", line);
-            }
+        if let Some(lyrics) = &lyrics {
+            let (index, mut line) = lyrics.get_line_at_time(get_position());
+
+            if prev_index == index { continue; }
             prev_index = index;
+
+            if matches!(is_japanese(&line), IsJapanese::True) {
+                line = kakasi::convert(line).romaji;
+            }
+
+            println!("{}", line);
         }
-        
-        thread::sleep(Duration::from_secs_f32(0.1));
     }
 }
