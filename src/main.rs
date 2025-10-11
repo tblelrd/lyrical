@@ -44,6 +44,8 @@ impl LyricObject {
         eprintln!("Requesting: {}", request);
 
         let res = reqwest::get(request).await.ok()?;
+        eprintln!("Response receieved, parsing...");
+
         let body = res.text().await.ok()?;
         let json: Value = serde_json::from_str(&body).ok()?;
 
