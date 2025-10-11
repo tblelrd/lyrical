@@ -60,7 +60,7 @@ impl LyricObject {
             .split("\n")
             .map(|s| s.to_string())
             .filter(|s| s.len() > 0)
-            .map(|s| (get_time_from_string(&s[..10]).expect("Couldn't get time somehow"), s[10..].trim().to_string()))
+            .map(|s| (get_time_from_string(&s[..10]).expect("Somehow can't get time from string"), s[10..].trim().to_string()))
             .collect();
 
         Some(Self {
@@ -99,7 +99,7 @@ fn command(command: &str) -> String {
 }
 
 fn get_position() -> f32 {
-    command("playerctl position")
+    command("playerctl -p spotify position")
         .trim()
         .parse()
         .unwrap_or(0.)
@@ -107,9 +107,9 @@ fn get_position() -> f32 {
 }
 
 fn get_metadata() -> Option<Metadata> {
-    let title = command("playerctl metadata title").trim().to_string();
-    let artist = command("playerctl metadata artist").trim().to_string();
-    let album = command("playerctl metadata album").trim().to_string();
+    let title = command("playerctl -p spotify metadata title").trim().to_string();
+    let artist = command("playerctl -p spotify metadata artist").trim().to_string();
+    let album = command("playerctl -p spotify metadata album").trim().to_string();
 
     // No title and artist means not searchable
     if title.is_empty() && artist.is_empty() {
