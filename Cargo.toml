@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 kakasi = "0.1.0"
+mandarin-to-pinyin = "0.0.2"
 playerctl = "0.1.0"
 reqwest = "0.12.23"
 serde_json = "1.0.145"
