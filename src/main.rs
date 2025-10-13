@@ -5,6 +5,15 @@ use std::{process::Command, thread, time::Duration};
 
 const BASE_URL: &str = "https://lrclib.net/api/search";
 
+#[derive(Debug, Default)]
+enum Language {
+    Chinese,
+    Japanese,
+
+    #[default]
+    Other,
+}
+
 #[derive(Clone, Debug, Default)]
 struct Metadata {
     title: String,
@@ -22,51 +31,24 @@ impl PartialEq for Metadata {
 struct LyricObject {
     metadata: Metadata,
     lyrics: Vec<(f32, String)>,
+    language: Language,
 }
 
 impl LyricObject {
     fn with_metadata(metadata: Metadata) -> Self {
         Self {
             metadata,
+            language: Language::Other,
             lyrics: vec![],
         }
     }
 
     async fn from_metadata(metadata: Metadata) -> Option<Self> {
-        let request = format!(
-            "{}?track_name={}&artist_name={}&album_name={}", 
-            BASE_URL,
-            metadata.title,
-            metadata.artist,
-            metadata.album,
-        );
-
-        eprintln!("Requesting: {}", request);
-
-        let res = reqwest::get(request).await.ok()?;
-        eprintln!("Response receieved, parsing...");
-
-        let body = res.text().await.ok()?;
-        let json: Value = serde_json::from_str(&body).ok()?;
-
-        if !json.is_array() {
-            eprintln!("Not an array");
-            return None;
-        }
-
-        let results = json.as_array()?;
-        let lyrics = get_lyrics_from_results(results)?;
-        eprintln!("Found lyrics");
-        
-        let lyrics: Vec<(f32, String)> = lyrics
-            .split("\n")
-            .map(|s| s.to_string())
-            .filter(|s| s.len() > 0)
-            .map(|s| (get_time_from_string(&s[..10]).expect("Somehow can't get time from string"), s[10..].trim().to_string()))
-            .collect();
+        let (language, lyrics) = request_lyrics(&metadata).await?;
 
         Some(Self {
             metadata,
+            language,
             lyrics,
         })
     }
@@ -79,10 +61,78 @@ impl LyricObject {
     }
 }
 
-fn get_lyrics_from_results(results: &Vec<Value>) -> Option<String> {
+async fn request_lyrics(metadata: &Metadata) -> Option<(Language, Vec<(f32, String)>)> {
+    let request = format!(
+        "{}?track_name={}&artist_name={}&album_name={}", 
+        BASE_URL,
+        metadata.title,
+        metadata.artist,
+        metadata.album,
+    );
+    eprintln!("Requesting: {}", request);
+
+    let res = reqwest::get(request).await.ok()?;
+    eprintln!("Response receieved, parsing...");
+
+    let body = res.text().await.ok()?;
+    let json: Value = serde_json::from_str(&body).ok()?;
+
+    if !json.is_array() {
+        eprintln!("Not an array");
+        return None;
+    }
+
+    let results = json.as_array()?;
+    let (language, lyrics) = get_lyrics_from_results(results)?;
+    eprintln!("Found lyrics in {:?}", language);
+
+    Some((language, lyrics))
+}
+
+fn get_lyrics_from_results(results: &Vec<Value>) -> Option<(Language, Vec<(f32, String)>)> {
     for result in results {
         if result["syncedLyrics"].is_string() {
-            return Some(result["syncedLyrics"].as_str()?.to_string());
+            // Check if the synced lyrics are actually strings.
+            let synced_lyrics = if let Some(ref lyrics) = result["syncedLyrics"].as_str() {
+                lyrics.to_string()
+            } else {
+                continue;
+            };
+
+            // Create a timestamped list of lyrics, if format wrong then go next.
+            let timestamped_lyrics: Vec<(f32, String)> = if let Some(lyrics) = synced_lyrics
+                .split("\n")
+                .map(|s| s.to_string())
+                .filter(|s| s.len() > 0)
+                // Map into an option of a tuple.
+                // The ? syntax will propogate the None up into the full option
+                // so instead of (Option<f32, String) it will be Option<(f32, String)>
+                // That's why the Some is at the front, to explicitly declare that it will
+                // return an option.
+                .map(|s| Some((get_time_from_string(&s[..10])?, s[10..].trim().to_string())))
+                // The turbofish is to tell collect to use the option implementation rather than the
+                // default vec<> collect method.
+                // Then we do ? again to propogate any none values in the lyrics to return
+                // none.
+                .collect::<Option<_>>()
+            {
+                lyrics
+            } else {
+                continue;
+            };
+
+            // Check what language the lyrics are in.
+            let language = if let Some(lyrics) = result["plainLyrics"].as_str() {
+                match is_japanese(lyrics) {
+                    IsJapanese::False => Language::Other,
+                    IsJapanese::Maybe => Language::Chinese,
+                    IsJapanese::True => Language::Japanese,
+                }
+            } else {
+                Language::Other
+            };
+            
+            return Some((language, timestamped_lyrics));
         }
     }
     None
@@ -137,8 +187,31 @@ fn get_time_from_string(time_string: impl ToString) -> Option<f32> {
     Some(position)
 }
 
+fn to_pinyin(line: &str) -> String {
+    let mut translated = String::new();
+    let mut last_pinyin = false;
+    for character in line.chars() {
+        let res = match mandarin_to_pinyin::lookup_chars(&[character]) {
+            Ok(pinyin) => match pinyin.vec[0] {
+                Some(ref result) => result[0].clone(),
+                None => character.to_string()
+            },
+            Err(_) => character.to_string(),
+        };
+
+        if last_pinyin { translated += " " };
+        translated += &res;
+        last_pinyin = res.len() != 1;
+    }
+
+    translated.trim().to_string()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize chinese to pinyin map
+    mandarin_to_pinyin::init_map(None).expect("Cant be bothered catching this one");
+
     // let mut metadata: Option<Metadata> = None;
     let mut lyrics: Option<LyricObject> = None;
 
@@ -167,7 +240,10 @@ async fn main() -> Result<()> {
                     // Just return it if it exists
                     Some(lyrics) => Some(lyrics),
                     // Return an empty lyrics object if not
-                    None => Some(LyricObject::with_metadata(metadata.clone()))
+                    None => {
+                        eprintln!("Couldn't find lyrics for song {:?}", metadata);
+                        Some(LyricObject::with_metadata(metadata.clone()))
+                    },
                 },
                 None => None,
             }
@@ -179,8 +255,10 @@ async fn main() -> Result<()> {
             if prev_index == index { continue; }
             prev_index = index;
 
-            if matches!(is_japanese(&line), IsJapanese::True) {
-                line = kakasi::convert(line).romaji;
+            match lyrics.language {
+                Language::Japanese => line = kakasi::convert(line).romaji,
+                Language::Chinese => line = to_pinyin(&line),
+                Language::Other => {},
             }
 
             println!("{}", line);
