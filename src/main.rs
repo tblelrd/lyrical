@@ -1,7 +1,7 @@
 use anyhow::Result;
 use kakasi::{is_japanese, IsJapanese};
 use serde_json::Value;
-use std::{process::Command, thread, time::Duration};
+use std::{cmp::Ordering, process::Command, thread, time::Duration};
 
 const BASE_URL: &str = "https://lrclib.net/api/search";
 
@@ -23,6 +23,7 @@ struct Metadata {
     title: String,
     artist: String,
     album: String,
+    duration: Option<f64>,
 }
 
 impl PartialEq for Metadata {
@@ -86,12 +87,33 @@ async fn request_lyrics(metadata: &Metadata) -> Option<(Language, Vec<(f32, Stri
         return None;
     }
 
-    let results = json.as_array()?;
-    let (language, lyrics) = get_lyrics_from_results(results)?;
+    let mut results = json.as_array()?.clone();
+    match metadata.duration {
+        Some(duration) => {
+            results.sort_by(|a, b| {
+                let a_duration = &a["duration"];
+                let b_duration = &b["duration"];
+
+                match (a_duration.is_f64(), b_duration.is_f64()) {
+                    (true, true) => 
+                        (a_duration.as_f64().unwrap() - duration).abs()
+                        .total_cmp(
+                            &(b_duration.as_f64().unwrap() - duration).abs()
+                        ),
+                    (true, false) => Ordering::Greater,
+                    (false, true) => Ordering::Less,
+                    (false, false) => Ordering::Equal,
+                }
+            });
+        },
+        None => {},
+    };
+    let (language, lyrics) = get_lyrics_from_results(&results)?;
     print_err(format!("Found lyrics in {:?}", language));
 
     Some((language, lyrics))
 }
+
 
 fn get_lyrics_from_results(results: &Vec<Value>) -> Option<(Language, Vec<(f32, String)>)> {
     for result in results {
@@ -166,16 +188,22 @@ fn get_metadata() -> Option<Metadata> {
     let title = command("playerctl -p spotify metadata title").trim().to_string();
     let artist = command("playerctl -p spotify metadata artist").trim().to_string();
     let album = command("playerctl -p spotify metadata album").trim().to_string();
+    let duration = if let Some(duration) = command("playerctl -p spotify metadata mpris:length").trim().parse::<u32>().ok() {
+        Some(duration as f64 / 1e6)
+    } else {
+        None
+    };
 
     // No title and artist means not searchable
     if title.is_empty() && artist.is_empty() {
-        return None;
+        return None; 
     }
 
     Some(Metadata {
         title,
         artist,
         album,
+        duration,
     })
 }
 
