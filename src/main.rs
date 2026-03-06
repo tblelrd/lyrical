@@ -49,7 +49,27 @@ impl LyricObject {
     }
 
     async fn from_metadata(metadata: Metadata) -> Option<Self> {
-        let (language, lyrics) = request_lyrics(&metadata).await?;
+        let request = format!(
+            "{}?track_name={}&artist_name={}&album_name={}",
+            BASE_URL,
+            metadata.title,
+            metadata.artist,
+            metadata.album,
+        );
+        print_err(format!("Requesting: {}", request));
+
+        let (language, lyrics) = if let Some(res) = request_lyrics(&request, &metadata).await {
+            res
+        } else {
+            let request = format!(
+                "{}?q={}",
+                BASE_URL,
+                metadata.title,
+            );
+            print_err(format!("Requesting: {}", request));
+
+            request_lyrics(&request, &metadata).await?
+        };
 
         Some(Self {
             metadata,
@@ -66,16 +86,7 @@ impl LyricObject {
     }
 }
 
-async fn request_lyrics(metadata: &Metadata) -> Option<(Language, Vec<(f32, String)>)> {
-    let request = format!(
-        "{}?track_name={}&artist_name={}&album_name={}", 
-        BASE_URL,
-        metadata.title,
-        metadata.artist,
-        metadata.album,
-    );
-    print_err(format!("Requesting: {}", request));
-
+async fn request_lyrics(request: &str, metadata: &Metadata) -> Option<(Language, Vec<(f32, String)>)> {
     let res = reqwest::get(request).await.ok()?;
     print_err("Response receieved, parsing...");
 
