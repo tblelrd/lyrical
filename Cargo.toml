@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+futures = "0.3.32"
 kakasi = "0.1.0"
 mandarin-to-pinyin = "0.0.2"
 playerctl = "0.1.0"
