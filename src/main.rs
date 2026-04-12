@@ -3,19 +3,21 @@ use kakasi::{is_japanese, IsJapanese};
 use serde_json::Value;
 use std::{cmp::Ordering, process::Command, thread, time::Duration};
 
+mod lyrics;
+mod song;
+
 const BASE_URL: &str = "https://lrclib.net/api/search";
 
-fn print_err(message: impl ToString) {
+fn info_log(message: impl ToString) {
     println!("[INFO] {}", message.to_string());
 }
 
 #[derive(Debug, Default)]
 enum Language {
-    Chinese,
-    Japanese,
-
     #[default]
     Other,
+    Chinese,
+    Japanese,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -56,7 +58,7 @@ impl LyricObject {
             metadata.artist,
             metadata.album,
         );
-        print_err(format!("Requesting: {}", request));
+        info_log(format!("Requesting: {}", request));
 
         let (language, lyrics) = if let Some(res) = request_lyrics(&request, &metadata).await {
             res
@@ -66,7 +68,7 @@ impl LyricObject {
                 BASE_URL,
                 metadata.title,
             );
-            print_err(format!("Requesting: {}", request));
+            info_log(format!("Requesting: {}", request));
 
             request_lyrics(&request, &metadata).await?
         };
@@ -88,13 +90,13 @@ impl LyricObject {
 
 async fn request_lyrics(request: &str, metadata: &Metadata) -> Option<(Language, Vec<(f32, String)>)> {
     let res = reqwest::get(request).await.ok()?;
-    print_err("Response receieved, parsing...");
+    info_log("Response receieved, parsing...");
 
     let body = res.text().await.ok()?;
     let json: Value = serde_json::from_str(&body).ok()?;
 
     if !json.is_array() {
-        print_err("Not an array");
+        info_log("Not an array");
         return None;
     }
 
@@ -120,7 +122,7 @@ async fn request_lyrics(request: &str, metadata: &Metadata) -> Option<(Language,
         None => {},
     };
     let (language, lyrics) = get_lyrics_from_results(&results)?;
-    print_err(format!("Found lyrics in {:?}", language));
+    info_log(format!("Found lyrics in {:?}", language));
 
     Some((language, lyrics))
 }
@@ -284,7 +286,7 @@ async fn main() -> Result<()> {
                     Some(lyrics) => Some(lyrics),
                     // Return an empty lyrics object if not
                     None => {
-                        print_err(format!("Couldn't find lyrics for song {:?}", metadata));
+                        info_log(format!("Couldn't find lyrics for song {:?}", metadata));
                         Some(LyricObject::with_metadata(metadata.clone()))
                     },
                 },
