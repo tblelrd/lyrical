@@ -3,7 +3,7 @@ use serde_json::Value;
 
 #[derive(Debug, Default)]
 /// Languages currently supported to be romanized.
-enum Language {
+pub enum Language {
     /// This should be English and
     /// other latin alphabet based langauges,
     /// or unsupported languages.
