@@ -1,7 +1,7 @@
 use futures::{StreamExt, stream};
 use serde_json::Value;
 
-use crate::{info_log, lyrics::Lyrics};
+use crate::{command, info_log, lyrics::Lyrics};
 
 const BASE_URL: &str = "https://lrclib.net/api/";
 
@@ -15,6 +15,7 @@ pub struct Song {
 }
 
 impl Song {
+    /// Creates a song object using the song metadata.
     pub async fn request_song(data: SongData) -> Option<Song> {
         // Pinned because stream doesn't own it or whatever
         let choices = Box::pin(
@@ -47,6 +48,7 @@ impl Song {
 }
 
 /// Data about the song, can be gathered from playerctl.
+#[derive(PartialEq)]
 pub struct SongData {
     title: String,
     artist: Option<String>,
@@ -55,6 +57,46 @@ pub struct SongData {
 }
 
 impl SongData {
+    /// Gets the metadata, prioritising spotify, if exists.
+    fn get_data() -> Option<Self> {
+        // Prefer spotify data.
+        let spotify_data = SongData::get_data_from_player("spotify");
+
+        // Or just get it from nothing.
+        spotify_data.or(SongData::get_data_from_player(""))
+    }
+
+    /// Gets the metadata of a song from a specified player.
+    fn get_data_from_player(player: &str) -> Option<Self> {
+        let flag = format!("-p {player}");
+        let playerctl = "playerctl".to_string() +
+            if player.is_empty() { "" } else { &flag } +
+            " metadata ";
+
+        let get_attr = |name: &str|
+            Some(
+                command(&(playerctl.clone() + name)).trim().to_string(),
+            ).filter(|s| s.is_empty());
+    
+        // Title required.
+        let title = get_attr("title")?;
+
+        let artist = get_attr("artist");
+        let album = get_attr("album");
+        let duration = get_attr("duration")
+            // Maps to an Option<Result<_>>
+            .map(|d| d.parse::<f64>())
+            // Flattens to just Option<_> and None if Err.
+            .and_then(|result| result.ok());
+
+        Some(Self {
+            title,
+            artist,
+            album,
+            duration,
+        })
+    }
+
     /// Request and parse lyrics from the website.
     async fn request_lyrics(&self, precision: u8) -> Option<Vec<Lyrics>> {
         let request = self.format_request(precision);

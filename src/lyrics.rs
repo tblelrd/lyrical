@@ -64,6 +64,13 @@ impl Lyrics {
             lyrics: timestamped,
         })
     }
+
+    pub fn get_line_at_time(&self, time: f64) -> &str {
+        match self.lyrics.iter().rev().find(|l| time > l.0) {
+            Some(l) => &l.1,
+            None => "",
+        }
+    }
 }
 
 fn get_language_from_text(lyrics: &str) -> Language{
