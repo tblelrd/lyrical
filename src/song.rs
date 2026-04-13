@@ -10,8 +10,8 @@ const MAX_DEVIATION: f64 = 5.;
 
 /// Stores the metadata and the lyrics
 pub struct Song {
-    data: SongData,
-    lyrics: Lyrics,
+    pub data: SongData,
+    pub lyrics: Lyrics,
 }
 
 impl Song {
@@ -48,7 +48,7 @@ impl Song {
 }
 
 /// Data about the song, can be gathered from playerctl.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct SongData {
     title: String,
     artist: Option<String>,
@@ -58,7 +58,7 @@ pub struct SongData {
 
 impl SongData {
     /// Gets the metadata, prioritising spotify, if exists.
-    fn get_data() -> Option<Self> {
+    pub fn get_data() -> Option<Self> {
         // Prefer spotify data.
         let spotify_data = SongData::get_data_from_player("spotify");
 
@@ -68,7 +68,7 @@ impl SongData {
 
     /// Gets the metadata of a song from a specified player.
     fn get_data_from_player(player: &str) -> Option<Self> {
-        let flag = format!("-p {player}");
+        let flag = format!(" -p {player}");
         let playerctl = "playerctl".to_string() +
             if player.is_empty() { "" } else { &flag } +
             " metadata ";
@@ -76,18 +76,19 @@ impl SongData {
         let get_attr = |name: &str|
             Some(
                 command(&(playerctl.clone() + name)).trim().to_string(),
-            ).filter(|s| s.is_empty());
+            ).filter(|s| !s.is_empty());
     
         // Title required.
         let title = get_attr("title")?;
 
         let artist = get_attr("artist");
         let album = get_attr("album");
-        let duration = get_attr("duration")
+        let duration = get_attr("mpris:length")
             // Maps to an Option<Result<_>>
             .map(|d| d.parse::<f64>())
             // Flattens to just Option<_> and None if Err.
-            .and_then(|result| result.ok());
+            .and_then(|result| result.ok())
+            .map(|d| d / 1e6);
 
         Some(Self {
             title,
