@@ -15,6 +15,7 @@ pub enum Language {
 
 /// A struct that contains the language and the lyrics
 /// of a song. The lyrics should be timestamped.
+#[derive(Debug)]
 pub struct Lyrics {
     pub language: Language,
     pub duration: f64,
@@ -44,9 +45,7 @@ impl Lyrics {
             // none.
             .collect::<Option<_>>()?;
 
-        let duration = timestamped
-            .iter()
-            .fold(0f64, |a, (b, _)| a + b);
+        let duration = object["duration"].as_f64()?;
 
         let language = object["plainLyrics"].as_str().map_or_else(
             // No plainLyrics, make plain lyrics.

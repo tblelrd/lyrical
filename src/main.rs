@@ -65,7 +65,6 @@ async fn main() -> Result<()> {
         thread::sleep(Duration::from_secs_f64(UPDATE_PERIOD));
 
         let data = SongData::get_data();
-        dbg!(&data);
         if match (&data, &song) {
             // True if metadata and lyrics exist and are different
             // e.g. changing songs
@@ -80,24 +79,25 @@ async fn main() -> Result<()> {
             // e.g. still playing same song
             _ => false,
         } {
-            // Switch lyrics object to be with new metadata, or no metadata.
+            // Requests the song if exists, or None if no data.
             song = OptionFuture::from(
                 data.map(|data| Song::request_song(data)),
-            ).await.flatten();
+            ).await;
         }
 
-        if let Some(song) = &song {
-            let line = song.lyrics.get_line_at_time(get_position());
-            if line == previous_line { continue }
-            previous_line = line.to_string();
+        let Some(song) = &song else { continue; };
+        let Some(lyrics) = &song.lyrics else { continue; };
 
-            let line = match song.lyrics.language {
-                Language::Japanese => kakasi::convert(line).romaji,
-                Language::Chinese => to_pinyin(line),
-                Language::Other => line.to_string(),
-            };
+        let line = lyrics.get_line_at_time(get_position());
+        if line == previous_line { continue }
+        previous_line = line.to_string();
 
-            println!("{}", line);
-        }
+        let line = match lyrics.language {
+            Language::Japanese => kakasi::convert(line).romaji,
+            Language::Chinese => to_pinyin(line),
+            Language::Other => line.to_string(),
+        };
+
+        println!("{}", line);
     }
 }

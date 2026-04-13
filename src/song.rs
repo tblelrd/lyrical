@@ -1,4 +1,5 @@
 use futures::{StreamExt, stream};
+use reqwest::Url;
 use serde_json::Value;
 
 use crate::{command, info_log, lyrics::Lyrics};
@@ -11,14 +12,15 @@ const MAX_DEVIATION: f64 = 5.;
 /// Stores the metadata and the lyrics
 pub struct Song {
     pub data: SongData,
-    pub lyrics: Lyrics,
+    pub lyrics: Option<Lyrics>,
 }
 
 impl Song {
     /// Creates a song object using the song metadata.
-    pub async fn request_song(data: SongData) -> Option<Song> {
+    /// The lyrics will be [None] if couldn't find.
+    pub async fn request_song(data: SongData) -> Song {
         // Pinned because stream doesn't own it or whatever
-        let choices = Box::pin(
+        let Some(choices) = Box::pin(
             // Use 0 to 3 for the precision.
             stream::iter((0..=3).into_iter())
             .map(|i| data.request_lyrics(i))
@@ -31,19 +33,32 @@ impl Song {
                     .into_iter()
                     .filter(|l| (l.duration - duration).abs() < MAX_DEVIATION)
                     .collect();
+
                 choices.sort_by(|a, b| (a.duration - duration).abs().total_cmp(&(b.duration - duration).abs()));
 
                 Some(choices)
             })
+            .filter(|v| {
+                let empty = v.is_empty();
+                async move { !empty }
+            })
         // Get the first working result.
-        ).next().await?;
+        ).next().await else {
+            info_log(&format!("Couldn't retrieve lyrics for {}", data.title));
 
-        let lyrics = choices.into_iter().nth(0)?;
+            // No lyrics
+            return Song {
+                data,
+                lyrics: None
+            };
+        };
 
-        Some(Song {
+        let lyrics = choices.into_iter().nth(0);
+
+        Song {
             data,
             lyrics,
-        })
+        }
     }
 }
 
@@ -101,7 +116,7 @@ impl SongData {
     /// Request and parse lyrics from the website.
     async fn request_lyrics(&self, precision: u8) -> Option<Vec<Lyrics>> {
         let request = self.format_request(precision);
-        info_log(format!("Requesting: {request}"));
+        info_log(format!("Requesting {precision}: {request}"));
 
         let res = reqwest::get(request).await.ok()?;
         info_log("Response received, parsing...");
@@ -109,46 +124,66 @@ impl SongData {
         let body = res.text().await.ok()?;
         let json: Value = serde_json::from_str(&body).ok()?;
 
-        let lyrics: Vec<Lyrics> = json.as_array()?
-            .iter()
-            .map(|json| Lyrics::from_json(json))
-            .collect::<Option<_>>()?;
+        if json.is_array() {
+            let lyrics: Vec<Lyrics> = json.as_array()?
+                .iter()
+                .filter_map(|json| Lyrics::from_json(json))
+                .collect();
 
-        Some(lyrics)
+            Some(lyrics)
+        } else {
+            Lyrics::from_json(&json).map(|l| vec![l])
+        }
     }
 
     /// Format the request with variable precision.
     /// Most precise at 0,
     /// Least precise at 3.
-    fn format_request(&self, precision: u8) -> String {
+    fn format_request(&self, precision: u8) -> Url {
         let precise =
             precision == 0 &&
             self.artist.is_some() &&
             self.album.is_some() &&
             self.duration.is_some();
 
-        let mut url = BASE_URL.to_string()
-            + if precise { "get/" } else { "search/" }
-            + "?"; // Start query
+        let mut attributes =
+            self.artist.is_some() as u8 +
+            self.album.is_some() as u8 +
+            self.duration.is_some() as u8;
 
-        url += &format!("track_name={}", self.title);
+        // Reduce by precision.
+        attributes -= precision;
 
-        if precision < 3 { return url };
+        // Don't use duration when imprecise.
+        if !precise && attributes == 3 { attributes -= 1}
+
+        let mut url = Url::parse(BASE_URL).expect("Invalid url??");
+        url.set_path(if precise {
+            "api/get"
+        } else {
+            "api/search"
+        });
+        url.query_pairs_mut()
+            .append_pair("track_name", &self.title);
+
+        let add_pair = |precision: &mut u8, url: &mut Url, key: &str, value: &str| {
+            if *precision <= 0 { return }
+            *precision -= 1;
+
+            url.query_pairs_mut().append_pair(key, value);
+        };
+
 
         if let Some(artist) = &self.artist {
-            url += &format!("artist_name={artist}");
+            add_pair(&mut attributes, &mut url, "artist_name", artist);
         }
-
-        if precision < 2 { return url };
 
         if let Some(album) = &self.album {
-            url += &format!("album_name={album}");
+            add_pair(&mut attributes, &mut url, "album_name", album);
         }
 
-        if precision < 1 { return url };
-
         if let Some(duration) = &self.duration {
-            url += &format!("duration={duration}");
+            add_pair(&mut attributes, &mut url, "duration", &duration.to_string());
         }
 
         url
