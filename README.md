@@ -3,12 +3,23 @@
 Simple lyrics program that you can use for something like
 waybar.
 
-Using [https://lrclib.net/] to request lyrics.
+Using [lrclib.net](https://lrclib.net/) to request lyrics.
+
+Automatically romanizes chinese and japanese lyrics.
+Will develop a way to turn it off in the future.
 
 # Installation
 
 Make sure you have `playerctl` in your `$PATH`.
 (The package to install is usually just called `playerctl`).
+
+## Cargo (crates.io)
+
+Install the program from [crates.io](https://crates.io/).
+
+```sh
+cargo install lyrical
+```
 
 ## Cargo (git)
 
