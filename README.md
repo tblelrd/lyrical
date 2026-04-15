@@ -21,6 +21,9 @@ Install the program from [crates.io](https://crates.io/).
 cargo install lyrical
 ```
 
+Cargo will build the `lyrical` binary and place it in your `CARGO_INSTALL_ROOT`.
+For more details on installation location see [the cargo book](https://doc.rust-lang.org/cargo/commands/cargo-install.html#description)
+
 ## Cargo (git)
 
 Install this program from git by running this command.
@@ -28,9 +31,6 @@ Install this program from git by running this command.
 ```sh
 cargo install --git https://github.com/tblelrd/lyrical
 ```
-
-Cargo will build the `lyrical` binary and place it in your `CARGO_INSTALL_ROOT`.
-For more details on installation location see [the cargo book](https://doc.rust-lang.org/cargo/commands/cargo-install.html#description)
 
 # Configuration
 
