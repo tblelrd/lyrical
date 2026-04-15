@@ -1,7 +1,7 @@
 use kakasi::IsJapanese;
 use serde_json::Value;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// Languages currently supported to be romanized.
 pub enum Language {
     /// This should be English and
@@ -15,7 +15,7 @@ pub enum Language {
 
 /// A struct that contains the language and the lyrics
 /// of a song. The lyrics should be timestamped.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Lyrics {
     pub language: Language,
     pub duration: f64,
@@ -64,6 +64,7 @@ impl Lyrics {
         })
     }
 
+    /// Gets a reference to the line at the timestamp.
     pub fn get_line_at_time(&self, time: f64) -> &str {
         match self.lyrics.iter().rev().find(|l| time > l.0) {
             Some(l) => &l.1,

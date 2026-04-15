@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use futures::{StreamExt, stream};
 use reqwest::Url;
 use serde_json::Value;
+use tokio::time::timeout;
 
 use crate::{command, info_log, lyrics::Lyrics};
 
@@ -8,6 +11,15 @@ const BASE_URL: &str = "https://lrclib.net/api/";
 
 /// Maximum duration difference for lyrics to be considered.
 const MAX_DEVIATION: f64 = 5.;
+
+/// Maximum number of concurrent requests (This doesn't need to be above 4).
+const MAX_CONCURRENCE: usize = 4;
+
+/// How many characters can be displayed before truncated.
+const MAX_TITLE_LENGTH: usize = 30;
+
+/// How long each request waits before giving up.
+const RESPONSE_TIMEOUT: f64 = 5.0;
 
 /// Stores the metadata and the lyrics
 pub struct Song {
@@ -19,42 +31,50 @@ impl Song {
     /// Creates a song object using the song metadata.
     /// The lyrics will be [None] if couldn't find.
     pub async fn request_song(data: SongData) -> Song {
-        // Pinned because stream doesn't own it or whatever
-        let Some(choices) = Box::pin(
-            // Use 0 to 3 for the precision.
-            stream::iter((0..=3).into_iter())
+        info_log(format!("Requesting {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
+
+        // Use 0 to 3 for the precision.
+        let mut choices: Vec<Lyrics> = stream::iter((0..=3).into_iter())
             .map(|i| data.request_lyrics(i))
-            .filter_map(|maybe_lyrics| async move {
-                let choices = maybe_lyrics.await?;
+            // Concurrently request those lyrics.
+            .buffer_unordered(MAX_CONCURRENCE)
+            .filter_map(|choices| async move {
+                let choices = choices?;
                 let Some(duration) = data.duration else { return Some(choices) };
 
-                // Filter and sort the lyrics based on closest duration.
-                let mut choices: Vec<Lyrics> = choices
+                // Only allow a max deviation of duration.
+                let choices: Vec<Lyrics> = choices
                     .into_iter()
                     .filter(|l| (l.duration - duration).abs() < MAX_DEVIATION)
                     .collect();
 
-                choices.sort_by(|a, b| (a.duration - duration).abs().total_cmp(&(b.duration - duration).abs()));
-
                 Some(choices)
             })
+            // Remove empty lists.
             .filter(|v| {
                 let empty = v.is_empty();
                 async move { !empty }
             })
-        // Get the first working result.
-        ).next().await else {
-            info_log(&format!("Couldn't retrieve lyrics for {}", data.title));
+            // Convert Vec to Stream then flattens.
+            .flat_map(stream::iter)
+            .collect().await;
 
-            // No lyrics
+        if choices.is_empty() {
+            info_log(format!("Coudln't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
             return Song {
                 data,
-                lyrics: None
-            };
-        };
+                lyrics: None,
+            }
+        }
 
+        // Sort lyrics by closest duration.
+        if let Some(duration) = data.duration {
+            choices.sort_by(|a, b| (a.duration - duration).abs().total_cmp(&(b.duration - duration).abs()));
+        }
+
+        // Pick the lyrics with the lowest duration
         let lyrics = choices.into_iter().nth(0);
-
+        info_log("Lyrics successfully found");
         Song {
             data,
             lyrics,
@@ -79,6 +99,15 @@ impl SongData {
 
         // Or just get it from nothing.
         spotify_data.or(SongData::get_data_from_player(""))
+    }
+
+    /// Gets the title of the song with a max size.
+    fn get_title_truncated(&self, max_length: usize) -> String {
+        if self.title.len() <= max_length - 3 {
+            self.title.clone()
+        } else {
+            format!("{}...", self.title[..max_length-3].to_string())
+        }
     }
 
     /// Gets the metadata of a song from a specified player.
@@ -116,10 +145,15 @@ impl SongData {
     /// Request and parse lyrics from the website.
     async fn request_lyrics(&self, precision: u8) -> Option<Vec<Lyrics>> {
         let request = self.format_request(precision);
-        info_log(format!("Requesting {precision}: {request}"));
 
-        let res = reqwest::get(request).await.ok()?;
-        info_log("Response received, parsing...");
+        // Don't spend forever waiting for lyrics.
+        let res = timeout(
+            Duration::from_secs_f64(RESPONSE_TIMEOUT),
+            reqwest::get(request),
+        ).await.ok().or_else(|| {
+            info_log(" Timed Out");
+            None
+        })?.ok()?;
 
         let body = res.text().await.ok()?;
         let json: Value = serde_json::from_str(&body).ok()?;
