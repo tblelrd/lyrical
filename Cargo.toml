@@ -3,6 +3,8 @@ name = "lyrical"
 version = "0.1.0"
 edition = "2024"
 license-file = "LICENSE"
+description = "Tool to show the lyrics of the current song."
+repository = "https://github.com/tblelrd/lyrical"
 
 [dependencies]
 anyhow = "1.0.100"
