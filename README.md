@@ -8,6 +8,9 @@ Using [lrclib.net](https://lrclib.net/) to request lyrics.
 Automatically romanizes chinese and japanese lyrics.
 Will develop a way to turn it off in the future.
 
+Example of this program on waybar.
+![lyrics-on-waybar](./lyrics-on-waybar.png)
+
 # Installation
 
 Make sure you have `playerctl` in your `$PATH`.
