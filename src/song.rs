@@ -60,7 +60,7 @@ impl Song {
             .collect().await;
 
         if choices.is_empty() {
-            info_log(format!("Coudln't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
+            info_log(format!("Couldn't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
             return Song {
                 data,
                 lyrics: None,
