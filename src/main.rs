@@ -94,6 +94,7 @@ async fn main() -> Result<()> {
 
         let line = match lyrics.language {
             Language::Japanese => kakasi::convert(line).romaji,
+            Language::Korean => korean_romanize::convert(line),
             Language::Chinese => to_pinyin(line),
             Language::Other => line.to_string(),
         };

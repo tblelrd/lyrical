@@ -11,6 +11,7 @@ pub enum Language {
     Other,
     Chinese,
     Japanese,
+    Korean,
 }
 
 /// A struct that contains the language and the lyrics
@@ -73,11 +74,17 @@ impl Lyrics {
     }
 }
 
-fn get_language_from_text(lyrics: &str) -> Language{
+fn get_language_from_text(lyrics: &str) -> Language {
     match kakasi::is_japanese(lyrics) {
-        IsJapanese::False => Language::Other,
         IsJapanese::Maybe => Language::Chinese,
         IsJapanese::True => Language::Japanese,
+        IsJapanese::False => {
+            if korean_romanize::has_korean(lyrics) {
+                Language::Korean
+            } else {
+                Language::Other
+            }
+        },
     }
 }
 
