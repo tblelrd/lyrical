@@ -5,8 +5,8 @@ waybar.
 
 Using [lrclib.net](https://lrclib.net/) to request lyrics.
 
-Automatically romanizes chinese and japanese lyrics.
-Will develop a way to turn it off in the future.
+Automatically romanizes chinese, japanese, and korean lyrics.
+Will develop a toggle for it in the future.
 
 Example of this program on waybar.
 ![lyrics-on-waybar](./lyrics-on-waybar.png)
