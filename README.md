@@ -1,5 +1,8 @@
 # Lyrics Program!
 
+[![crates.io](https://img.shields.io/crates/v/lyrical)](https://crates.io/crates/lyrical)
+[![licence](https://img.shields.io/crates/l/lyrical)](https://github.com/tblelrd/lyrical)
+
 Simple lyrics program that you can use for something like
 waybar.
 
@@ -18,7 +21,7 @@ Make sure you have `playerctl` in your `$PATH`.
 
 ## Cargo (crates.io)
 
-Install the program from [crates.io](https://crates.io/).
+Install the program from [crates.io](https://crates.io/crates/lyrical).
 
 ```sh
 cargo install lyrical

@@ -672,14 +672,13 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "lyrical"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "futures",
  "kakasi",
  "korean-romanize",
  "mandarin-to-pinyin",
- "playerctl",
  "reqwest",
  "serde_json",
  "tokio",
@@ -910,12 +909,6 @@ name = "pkg-config"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
-
-[[package]]
-name = "playerctl"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46e64d4850dfbd759aa3f4e303674ee3f697b9548ab60dc0e2571dc43568a7c7"
 
 [[package]]
 name = "potential_utf"
