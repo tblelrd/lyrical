@@ -16,7 +16,7 @@ const MAX_DEVIATION: f64 = 5.;
 const MAX_CONCURRENCE: usize = 4;
 
 /// How many characters can be displayed before truncated.
-const MAX_TITLE_LENGTH: usize = 30;
+const MAX_TITLE_LENGTH: usize = 25;
 
 /// How long each request waits before giving up.
 const RESPONSE_TIMEOUT: f64 = 5.0;
@@ -50,7 +50,6 @@ impl Song {
 
                 Some(choices)
             })
-            // Remove empty lists.
             .filter(|v| {
                 let empty = v.is_empty();
                 async move { !empty }
@@ -67,6 +66,8 @@ impl Song {
             }
         }
 
+        info_log(format!("{} Lyrics Found", choices.len()));
+
         // Sort lyrics by closest duration.
         if let Some(duration) = data.duration {
             choices.sort_by(|a, b| (a.duration - duration).abs().total_cmp(&(b.duration - duration).abs()));
@@ -74,7 +75,6 @@ impl Song {
 
         // Pick the lyrics with the lowest duration
         let lyrics = choices.into_iter().nth(0);
-        info_log("Lyrics successfully found");
         Song {
             data,
             lyrics,
@@ -103,10 +103,10 @@ impl SongData {
 
     /// Gets the title of the song with a max size.
     fn get_title_truncated(&self, max_length: usize) -> String {
-        if self.title.len() <= max_length - 3 {
+        if self.title.len() <= max_length {
             self.title.clone()
         } else {
-            format!("{}...", self.title[..max_length-3].to_string())
+            format!("{}...", self.title.chars().take(max_length).collect::<String>())
         }
     }
 
@@ -151,7 +151,7 @@ impl SongData {
             Duration::from_secs_f64(RESPONSE_TIMEOUT),
             reqwest::get(request),
         ).await.ok().or_else(|| {
-            info_log(" Timed Out");
+            info_log("Timed Out");
             None
         })?.ok()?;
 
