@@ -1,9 +1,9 @@
 [package]
 name = "lyrical"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 license = "GPL-3.0-only"
-description = "Tool to show the lyrics of the current song."
+description = "CLI Tool to show the lyrics of the current song using playerctl."
 repository = "https://github.com/tblelrd/lyrical"
 
 [dependencies]

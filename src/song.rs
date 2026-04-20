@@ -3,14 +3,13 @@ use std::time::Duration;
 use futures::{StreamExt, stream};
 use reqwest::Url;
 use serde_json::Value;
-use tokio::time::timeout;
 
 use crate::{command, info_log, lyrics::Lyrics};
 
 const BASE_URL: &str = "https://lrclib.net/api/";
 
 /// Maximum duration difference for lyrics to be considered.
-const MAX_DEVIATION: f64 = 5.;
+const MAX_DEVIATION: f64 = 2.;
 
 /// Maximum number of concurrent requests (This doesn't need to be above 4).
 const MAX_CONCURRENCE: usize = 4;
@@ -33,8 +32,7 @@ impl Song {
     pub async fn request_song(data: SongData) -> Song {
         info_log(format!("Requesting {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
 
-        // Use 0 to 3 for the precision.
-        let mut choices: Vec<Lyrics> = stream::iter((0..=3).into_iter())
+        let mut stream = Box::pin(stream::iter((0..=3).into_iter())
             .map(|i| data.request_lyrics(i))
             // Concurrently request those lyrics.
             .buffer_unordered(MAX_CONCURRENCE)
@@ -53,10 +51,30 @@ impl Song {
             .filter(|v| {
                 let empty = v.is_empty();
                 async move { !empty }
-            })
-            // Convert Vec to Stream then flattens.
-            .flat_map(stream::iter)
-            .collect().await;
+            }));
+
+        let mut choices: Vec<Lyrics> = vec![];
+        let mut timeout = Box::pin(tokio::time::sleep(Duration::from_secs_f64(RESPONSE_TIMEOUT)));
+
+        loop {
+            tokio::select! {
+                n = stream.next() => {
+                    let Some(mut n) = n else {
+                        // No more songs.
+                        break;
+                    };
+                    choices.append(&mut n);
+                },
+                // Timeout and at least one response.
+                _ = (&mut timeout) => if !choices.is_empty() {
+                    info_log("Timed out, only some lyrics found");
+                    break;
+                }
+            }
+        }
+
+        // Don't need this anymore.
+        drop(stream);
 
         if choices.is_empty() {
             info_log(format!("Couldn't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
@@ -83,7 +101,7 @@ impl Song {
 }
 
 /// Data about the song, can be gathered from playerctl.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SongData {
     title: String,
     artist: Option<String>,
@@ -147,13 +165,7 @@ impl SongData {
         let request = self.format_request(precision);
 
         // Don't spend forever waiting for lyrics.
-        let res = timeout(
-            Duration::from_secs_f64(RESPONSE_TIMEOUT),
-            reqwest::get(request),
-        ).await.ok().or_else(|| {
-            info_log("Timed Out");
-            None
-        })?.ok()?;
+        let res = reqwest::get(request).await.ok()?;
 
         let body = res.text().await.ok()?;
         let json: Value = serde_json::from_str(&body).ok()?;

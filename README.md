@@ -11,6 +11,8 @@ Using [lrclib.net](https://lrclib.net/) to request lyrics.
 Automatically romanizes chinese, japanese, and korean lyrics.
 Will develop a toggle for it in the future.
 
+No AI was used for the creation of this program!
+
 Example of this program on waybar.
 ![lyrics-on-waybar](./lyrics-on-waybar.png)
 
