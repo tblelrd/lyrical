@@ -54,6 +54,15 @@ Run the help command for all of the options.
 lyrical --help
 ```
 
+If you can read the script of an automatically romanized
+language, like japanese. You can disable romanziation on
+that language like this. (All languages can be found in the
+help command)
+
+```sh
+lyrical -d ja
+```
+
 # Configuration
 
 ## Waybar
