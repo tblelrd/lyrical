@@ -1,13 +1,14 @@
+use clap::Parser;
 use anyhow::Result;
-use futures::future::OptionFuture;
-use std::{process::Command, thread, time::Duration};
+use std::process::Command;
 
-use crate::{lyrics::Language, song::{Song, SongData}};
+use crate::{lyrics::Language, modes::default::run_default, song::{Player, get_flag_from_player}};
 
 mod lyrics;
+mod modes;
 mod song;
 
-const UPDATE_PERIOD: f64 = 0.1f64;
+pub const UPDATE_PERIOD: f64 = 0.1f64;
 
 fn info_log(message: impl ToString) {
     println!("[INFO] {}", message.to_string());
@@ -25,80 +26,26 @@ fn command(command: &str) -> String {
     String::from_utf8(stdout).expect("Stdout was not valid UTF-8")
 }
 
-fn get_position() -> f64 {
-    command("playerctl -p spotify position")
+fn get_position(player: &Option<Player>) -> f64 {
+    let flag = get_flag_from_player(player);
+    command(&format!("playerctl {flag} position"))
         .trim()
         .parse()
         .unwrap_or(0.)
-        // .expect("Command returned with non-float answer")
 }
 
-fn to_pinyin(line: &str) -> String {
-    let mut translated = String::new();
-    let mut last_pinyin = false;
-    for character in line.chars() {
-        let res = match mandarin_to_pinyin::lookup_chars(&[character]) {
-            Ok(pinyin) => match pinyin.vec[0] {
-                Some(ref result) => result[0].clone(),
-                None => character.to_string()
-            },
-            Err(_) => character.to_string(),
-        };
-
-        if last_pinyin { translated += " " };
-        translated += &res;
-        last_pinyin = res.len() != 1;
-    }
-
-    translated.trim().to_string()
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// List of languages that shouldn't be romanized,
+    /// separated by a comma.
+    #[arg(value_enum, value_delimiter = ',', short, long)]
+    dont_romanize: Vec<Language>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize chinese to pinyin map
-    mandarin_to_pinyin::init_map(None).expect("Cant be bothered catching this one");
-
-    // let mut metadata: Option<Metadata> = None;
-    let mut song: Option<Song> = None;
-    let mut previous_line = "".to_string();
-    loop {
-        thread::sleep(Duration::from_secs_f64(UPDATE_PERIOD));
-
-        let data = SongData::get_data();
-        if match (&data, &song) {
-            // True if metadata and lyrics exist and are different
-            // e.g. changing songs
-            (Some(data), Some(song)) => data != &song.data,
-            // True if lyrics exist but metadata doesn't
-            // e.g. no more songs
-            (None, Some(_)) => true,
-            // True if metadata exists but lyrics don't
-            // e.g. just started playing
-            (Some(_), None) => true,
-            // Else false
-            // e.g. still playing same song
-            _ => false,
-        } {
-            // Requests the song if exists, or None if no data.
-            song = OptionFuture::from(
-                data.map(|data| Song::request_song(data)),
-            ).await;
-        }
-
-        let Some(song) = &song else { continue; };
-        let Some(lyrics) = &song.lyrics else { continue; };
-
-        let line = lyrics.get_line_at_time(get_position());
-        if line == previous_line { continue }
-        previous_line = line.to_string();
-
-        let line = match lyrics.language {
-            Language::Japanese => kakasi::convert(line).romaji,
-            Language::Korean => korean_romanize::convert(line),
-            Language::Chinese => to_pinyin(line),
-            Language::Other => line.to_string(),
-        };
-
-        println!("{}", line);
-    }
+    let cli = Cli::parse();
+    run_default(cli.dont_romanize).await?;
+    Ok(())
 }

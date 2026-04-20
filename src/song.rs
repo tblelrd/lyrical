@@ -9,7 +9,7 @@ use crate::{command, info_log, lyrics::Lyrics};
 const BASE_URL: &str = "https://lrclib.net/api/";
 
 /// Maximum duration difference for lyrics to be considered.
-const MAX_DEVIATION: f64 = 2.;
+const MAX_DEVIATION: f64 = 1.;
 
 /// Maximum number of concurrent requests (This doesn't need to be above 4).
 const MAX_CONCURRENCE: usize = 4;
@@ -21,6 +21,7 @@ const MAX_TITLE_LENGTH: usize = 25;
 const RESPONSE_TIMEOUT: f64 = 5.0;
 
 /// Stores the metadata and the lyrics
+#[derive(Clone, Debug)]
 pub struct Song {
     pub data: SongData,
     pub lyrics: Option<Lyrics>,
@@ -60,7 +61,7 @@ impl Song {
             tokio::select! {
                 n = stream.next() => {
                     let Some(mut n) = n else {
-                        // No more songs.
+                        // No more responses.
                         break;
                     };
                     choices.append(&mut n);
@@ -107,16 +108,38 @@ pub struct SongData {
     artist: Option<String>,
     album: Option<String>,
     duration: Option<f64>,
+    pub player: Option<Player>,
+}
+
+/// The player that is used to get the metadata.
+/// This is only if a specific player is used.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Player {
+    Spotify
+}
+
+impl ToString for Player {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Spotify => "spotify"
+        }.to_string()
+    }
+}
+
+pub fn get_flag_from_player(player: &Option<Player>) -> String {
+    if let Some(player) = &player {
+        format!("-p {}", player.to_string())
+    } else { "".to_string() }
 }
 
 impl SongData {
     /// Gets the metadata, prioritising spotify, if exists.
     pub fn get_data() -> Option<Self> {
         // Prefer spotify data.
-        let spotify_data = SongData::get_data_from_player("spotify");
+        let spotify_data = SongData::get_data_from_player(Some(Player::Spotify));
 
         // Or just get it from nothing.
-        spotify_data.or(SongData::get_data_from_player(""))
+        spotify_data.or(SongData::get_data_from_player(None))
     }
 
     /// Gets the title of the song with a max size.
@@ -129,15 +152,13 @@ impl SongData {
     }
 
     /// Gets the metadata of a song from a specified player.
-    fn get_data_from_player(player: &str) -> Option<Self> {
-        let flag = format!(" -p {player}");
-        let playerctl = "playerctl".to_string() +
-            if player.is_empty() { "" } else { &flag } +
-            " metadata ";
+    fn get_data_from_player(player: Option<Player>) -> Option<Self> {
+        let flag = get_flag_from_player(&player);
+        let metadata_command = format!("playerctl {flag} metadata ");
 
         let get_attr = |name: &str|
             Some(
-                command(&(playerctl.clone() + name)).trim().to_string(),
+                command(&(metadata_command.clone() + name)).trim().to_string(),
             ).filter(|s| !s.is_empty());
     
         // Title required.
@@ -157,6 +178,7 @@ impl SongData {
             artist,
             album,
             duration,
+            player,
         })
     }
 
@@ -198,7 +220,7 @@ impl SongData {
             self.duration.is_some() as u8;
 
         // Reduce by precision.
-        attributes -= precision;
+        attributes -= precision.min(attributes);
 
         // Don't use duration when imprecise.
         if !precise && attributes == 3 { attributes -= 1}

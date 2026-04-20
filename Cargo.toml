@@ -1,6 +1,6 @@
 [package]
 name = "lyrical"
-version = "0.1.7"
+version = "0.2.0"
 edition = "2024"
 license = "GPL-3.0-only"
 description = "CLI Tool to show the lyrics of the current song using playerctl."
@@ -8,6 +8,7 @@ repository = "https://github.com/tblelrd/lyrical"
 
 [dependencies]
 anyhow = "1.0.100"
+clap = { version = "4.6.1", features = ["derive"] }
 futures = "0.3.32"
 kakasi = "0.1.0"
 korean-romanize = "0.2.0"

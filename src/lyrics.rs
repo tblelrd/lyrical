@@ -1,16 +1,28 @@
+use clap::ValueEnum;
+
 use kakasi::IsJapanese;
 use serde_json::Value;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, ValueEnum, PartialEq)]
 /// Languages currently supported to be romanized.
 pub enum Language {
     /// This should be English and
     /// other latin alphabet based langauges,
     /// or unsupported languages.
     #[default]
+    #[value(hide = true)]
     Other,
+
+    /// Chinese characters into pinyin.
+    #[value(name = "zh")]
     Chinese,
+
+    /// Japanese characters (and kanji) into romanji.
+    #[value(name = "ja")]
     Japanese,
+
+    /// Korean characters to latin script.
+    #[value(name = "ko")]
     Korean,
 }
 
