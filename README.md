@@ -9,7 +9,7 @@ waybar.
 Using [lrclib.net](https://lrclib.net/) to request lyrics.
 
 Automatically romanizes chinese, japanese, and korean lyrics.
-Will develop a toggle for it in the future.
+(Can be toggled per language, see [usage section](#usage))
 
 No AI was used for the creation of this program!
 
@@ -38,6 +38,20 @@ Install this program from git by running this command.
 
 ```sh
 cargo install --git https://github.com/tblelrd/lyrical
+```
+
+# Usage
+
+The program can just be run with no flags.
+
+```sh
+lyrical
+```
+
+Run the help command for all of the options.
+
+```sh
+lyrical --help
 ```
 
 # Configuration
