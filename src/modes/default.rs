@@ -2,7 +2,10 @@ use anyhow::Result;
 use futures::future::OptionFuture;
 use std::{thread, time::Duration};
 
-use crate::{UPDATE_PERIOD, get_position, lyrics::Language, song::{Song, SongData}};
+use crate::{get_position, lyrics::Language, song::{Song, SongData}};
+
+pub const UPDATE_PERIOD: f64 = 0.1f64;
+
 fn to_pinyin(line: &str) -> String {
     let mut translated = String::new();
     let mut last_pinyin = false;
@@ -52,6 +55,16 @@ pub async fn run_default(dont_romanize: Vec<Language>) -> Result<()> {
             song = OptionFuture::from(
                 data.map(|data| Song::request_song(data)),
             ).await;
+
+            if let Some(song) = &song {
+                // Empty line on no lyrics.
+                if let None = &song.lyrics {
+                    println!("");
+                }
+            // Empty line on no song.
+            } else {
+                println!("");
+            }
         }
 
         let Some(song) = &song else { continue; };

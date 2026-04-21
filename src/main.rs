@@ -1,6 +1,6 @@
 use clap::Parser;
 use anyhow::Result;
-use std::process::Command;
+use std::{process::Command, sync::atomic::{AtomicBool, Ordering}};
 
 use crate::{lyrics::Language, modes::default::run_default, song::{Player, get_flag_from_player}};
 
@@ -8,10 +8,12 @@ mod lyrics;
 mod modes;
 mod song;
 
-pub const UPDATE_PERIOD: f64 = 0.1f64;
+static SHOW_INFO: AtomicBool = AtomicBool::new(true);
 
 fn info_log(message: impl ToString) {
-    println!("[INFO] {}", message.to_string());
+    if SHOW_INFO.load(Ordering::Relaxed) {
+        println!("[INFO] {}", message.to_string());
+    }
 }
 
 fn command(command: &str) -> String {
@@ -41,11 +43,16 @@ struct Cli {
     /// separated by a comma.
     #[arg(value_enum, value_delimiter = ',', short, long)]
     dont_romanize: Vec<Language>,
+
+    /// Hide the information log (such as the current song that's being requested).
+    #[arg(long)]
+    hide_info_log: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    SHOW_INFO.store(!cli.hide_info_log, Ordering::Relaxed);
     run_default(cli.dont_romanize).await?;
     Ok(())
 }
