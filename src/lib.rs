@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::{process::Command, sync::atomic::{AtomicBool, Ordering}};
 
+pub mod cache;
 pub mod fetchers;
 pub mod lyrics;
 pub mod modes;
@@ -34,6 +35,26 @@ pub fn get_position(player: &Option<Player>) -> f64 {
         .trim()
         .parse()
         .unwrap_or(0.)
+}
+
+pub fn to_pinyin(line: &str) -> String {
+    let mut translated = String::new();
+    let mut last_pinyin = false;
+    for character in line.chars() {
+        let res = match mandarin_to_pinyin::lookup_chars(&[character]) {
+            Ok(pinyin) => match pinyin.vec[0] {
+                Some(ref result) => result[0].clone(),
+                None => character.to_string()
+            },
+            Err(_) => character.to_string(),
+        };
+
+        if last_pinyin { translated += " " };
+        translated += &res;
+        last_pinyin = res.len() != 1;
+    }
+
+    translated.trim().to_string()
 }
 
 #[derive(Parser)]

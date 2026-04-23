@@ -48,14 +48,10 @@ impl Lyrics {
             .filter(|s| !s.is_empty())
             // Map into an option of a tuple.
             // The ? syntax will propogate the None up into the full option
-            // so instead of (Option<f32, String) it will be Option<(f32, String)>
-            // That's why the Some is at the front, to explicitly declare that it will
-            // return an option.
+            // so instead of (Option<f32>, String) it will be Option<(f32, String)>
             .map(|s| Some((get_time_from_string(&s[..10])?, s[10..].trim().to_string())))
             // The turbofish is to tell collect to use the option implementation rather than the
             // default vec<> collect method.
-            // Then we do ? again to propogate any none values in the lyrics to return
-            // none.
             .collect::<Option<_>>()?;
 
         let duration = object["duration"].as_f64()?;

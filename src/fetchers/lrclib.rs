@@ -97,8 +97,13 @@ impl Fetcher for Lrclib {
 
 /// Just requests and parses an lrclib response into a list of lyrics.
 async fn request_and_parse(request: Url) -> Option<Vec<Lyrics>> {
-    // TODO: error handle?
-    let response = reqwest::get(request).await.ok()?;
+    let response = match reqwest::get(request).await {
+        Ok(res) => res,
+        Err(e) => {
+            info_log(format!("Error requesting: {:?}", e));
+            return None;
+        },
+    };
 
     let body = response.text().await.ok()?;
     let json: Value = serde_json::from_str(&body).ok()?;

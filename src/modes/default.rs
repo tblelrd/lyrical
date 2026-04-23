@@ -2,31 +2,11 @@ use anyhow::Result;
 use futures::future::OptionFuture;
 use std::{thread, time::Duration};
 
-use crate::{fetchers, get_position, lyrics::Language, song::{Song, SongData}};
+use crate::{cache::Cache, fetchers, get_position, lyrics::Language, song::{Song, SongData}, to_pinyin};
 
 pub const UPDATE_PERIOD: f64 = 0.1f64;
 
-fn to_pinyin(line: &str) -> String {
-    let mut translated = String::new();
-    let mut last_pinyin = false;
-    for character in line.chars() {
-        let res = match mandarin_to_pinyin::lookup_chars(&[character]) {
-            Ok(pinyin) => match pinyin.vec[0] {
-                Some(ref result) => result[0].clone(),
-                None => character.to_string()
-            },
-            Err(_) => character.to_string(),
-        };
-
-        if last_pinyin { translated += " " };
-        translated += &res;
-        last_pinyin = res.len() != 1;
-    }
-
-    translated.trim().to_string()
-}
-
-pub async fn run_default(dont_romanize: Vec<Language>) -> Result<()> {
+pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Result<()> {
     // Initialize chinese to pinyin map
     mandarin_to_pinyin::init_map(None).expect("Cant be bothered catching this one");
 
@@ -54,7 +34,7 @@ pub async fn run_default(dont_romanize: Vec<Language>) -> Result<()> {
             // Requests the song if exists, or None if no data.
             song = OptionFuture::from(
                 data.map(|data| async {
-                    let lyrics = fetchers::fetch_all(&data).await;
+                    let lyrics = fetchers::fetch_all(&data, &mut cache).await;
                     Song::new(data, lyrics)
                 }),
             ).await;
