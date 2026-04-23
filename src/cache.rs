@@ -1,20 +1,85 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::{Path, PathBuf}};
 
-use crate::{lyrics::Lyrics, song::{SongData}};
+use serde::{Deserialize, Serialize};
+use tokio::{fs::{self, File, OpenOptions}, io::{self, AsyncReadExt, AsyncWriteExt}};
+
+use crate::{info_log, lyrics::Lyrics, song::SongData};
 
 /// A simple cache implementation for lyrics.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Cache {
-    map: HashMap<String, Vec<CacheEntry>>
+    map: HashMap<String, Vec<CacheEntry>>,
+    location: PathBuf,
 }
 
 impl Cache {
-    pub fn new() -> Cache {
+    fn new(location: PathBuf) -> Cache {
         Cache {
             map: HashMap::new(),
+            location,
         }
     }
 
+    /// Reads the cache in that file, if theres a problem, will just generate an empty cache.
+    /// Creates a file if not existing.
+    /// Only errors when [OpenOptions::open] errors.
+    pub async fn read_from_file(path: &Path) -> io::Result<Self> {
+        let mut serialized = String::new();
+
+        // Create all parent directories if not found.
+        fs::create_dir_all(path.parent().expect("No parent directories?")).await?;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .await?;
+
+        let mut cache = Cache::new(path.into());
+
+        match File::read_to_string(&mut file, &mut serialized).await {
+            Ok(_) => {},
+
+            // Can't read to string, but its fine, will overwrite.
+            Err(e) => {
+                info_log(format!("Error when reading: {}", e));
+                return Ok(cache)
+            },
+        };
+        let entries: Vec<CacheEntry> = match serde_json::from_str(&serialized) {
+            Ok(entries) => entries,
+
+            // Empty or corrupted file (or just a random file), will overwrite anyways.
+            Err(e) => {
+                info_log(format!("Error when parsing: {}", e));
+                return Ok(cache)
+            },
+        };
+
+        for entry in entries {
+            cache.save_lyrics(&entry.data, &entry.lyrics, entry.occurences);
+        }
+
+        Ok(cache)
+    }
+
+    /// Saves the cache.
+    /// Errors when unable to open the cache file (doesn't create a new one).
+    /// Also errors when error with [AsyncWriteExt::write_all_buf].
+    pub async fn save_to_file(&self) -> io::Result<()> {
+        let entries = Into::<Vec<CacheEntry>>::into(self.clone());
+        let mut file = OpenOptions::new()
+            .write(true)
+            .open(&self.location)
+            .await?;
+        let serialized = serde_json::to_string(&entries).unwrap();
+        let mut buf = serialized.as_bytes();
+        file.write_all_buf(&mut buf).await?;
+        
+        Ok(())
+    }
+
+    /// Requests the closest matching lyrics from the cache.
     pub fn get_lyrics(&mut self, data: &SongData) -> Option<Lyrics> {
         let entries = self.map.get_mut(&data.title)?;
 
@@ -41,7 +106,8 @@ impl Cache {
         found.lyrics.clone()
     }
 
-    pub fn save_lyrics(&mut self, data: &SongData, lyrics: &Option<Lyrics>) {
+    /// Saves the lyrics to the cache.
+    pub fn save_lyrics(&mut self, data: &SongData, lyrics: &Option<Lyrics>, occurences: usize) {
         let entries = match self.map.get_mut(&data.title) {
             Some(entries) => entries,
             None => {
@@ -50,10 +116,11 @@ impl Cache {
             },
         };
 
-        entries.push(CacheEntry::new(data.clone(), lyrics.clone()));
+        entries.push(CacheEntry::new(data.clone(), lyrics.clone(), occurences));
     }
 }
 
+/// Quantifies the closeness of two metadata.
 fn get_closeness(a: &SongData, b: &SongData) -> u8 {
     let mut closeness = 0;
     if attribute_close(&a.artist, &b.artist) { closeness += 1 };
@@ -83,7 +150,7 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct CacheEntry {
     occurences: usize,
     data: SongData,
@@ -91,11 +158,20 @@ struct CacheEntry {
 }
 
 impl CacheEntry {
-    fn new(data: SongData, lyrics: Option<Lyrics>) -> CacheEntry {
+    fn new(data: SongData, lyrics: Option<Lyrics>, occurences: usize) -> CacheEntry {
         CacheEntry {
-            occurences: 0,
+            occurences,
             data,
             lyrics,
         }
+    }
+}
+
+impl From<Cache> for Vec<CacheEntry> {
+    fn from(value: Cache) -> Self {
+        value.map.into_iter()
+            .map(|(_, b)| b)
+            .flatten()
+            .collect()
     }
 }

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{command, lyrics::Lyrics};
 
 /// Stores the metadata and the lyrics
@@ -18,7 +20,7 @@ impl Song {
 }
 
 /// Data about the song, can be gathered from playerctl.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SongData {
     pub title: String,
     pub artist: Option<String>,
@@ -29,7 +31,7 @@ pub struct SongData {
 
 /// The player that is used to get the metadata.
 /// This is only if a specific player is used.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Player {
     Spotify
 }

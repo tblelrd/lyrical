@@ -1,9 +1,10 @@
 use clap::ValueEnum;
 
 use kakasi::IsJapanese;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Clone, Debug, Default, ValueEnum, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, ValueEnum, PartialEq)]
 /// Languages currently supported to be romanized.
 pub enum Language {
     /// This should be English and
@@ -28,7 +29,7 @@ pub enum Language {
 
 /// A struct that contains the language and the lyrics
 /// of a song. The lyrics should be timestamped.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Lyrics {
     pub language: Language,
     pub duration: f64,

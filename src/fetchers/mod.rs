@@ -25,9 +25,16 @@ pub async fn fetch_all(data: &SongData, cache: &mut Cache) -> Option<Lyrics> {
 
     info_log(format!("Requesting {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
     let choices = Lrclib::fetch(data).await?;
-    let lyrics = choices.into_iter().nth(0);
+    info_log(format!("Found {} lyrics", choices.len()));
 
-    cache.save_lyrics(data, &lyrics);
+    let lyrics = choices.into_iter().nth(0);
+    cache.save_lyrics(data, &lyrics, 0);
+
+    // Print save errors
+    match cache.save_to_file().await {
+        Ok(_) => {},
+        Err(e) => info_log(format!("Error saving cache: {}", e)),
+    };
 
     lyrics
 }

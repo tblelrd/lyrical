@@ -8,12 +8,16 @@ waybar.
 
 Using [lrclib.net](https://lrclib.net/) to request lyrics.
 
-Automatically romanizes chinese, japanese, and korean lyrics.
-(Can be toggled per language, see [usage section](#usage))
-
 No AI was used for the creation of this program!
 
-Example of this program on waybar.
+## Notable Features
+
+- Automatically romanizes chinese, japanese, and korean lyrics.
+  (Can be toggled per language, see [usage section](#usage))
+- Caching (grows infinitely as of right now, will fix very soon)
+
+## Demo Image
+
 ![lyrics-on-waybar](./lyrics-on-waybar.png)
 
 # Installation

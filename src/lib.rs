@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{process::Command, sync::atomic::{AtomicBool, Ordering}};
+use std::{path::PathBuf, process::Command, sync::atomic::{AtomicBool, Ordering}};
 
 pub mod cache;
 pub mod fetchers;
@@ -68,4 +68,9 @@ pub struct Cli {
     /// Hide the information log (such as the current song that's being requested).
     #[arg(long)]
     pub hide_info_log: bool,
+
+    /// The directory that stores the cache file(s).
+    /// This is $XDG_CACHE_HOME by default.
+    #[arg(short, long)]
+    pub cache_dir: Option<PathBuf>,
 }
