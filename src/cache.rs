@@ -1,7 +1,8 @@
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
+use bincode_next::config;
 use serde::{Deserialize, Serialize};
-use tokio::{fs::{self, File, OpenOptions}, io::{self, AsyncReadExt, AsyncWriteExt}};
+use tokio::{fs::{self, OpenOptions}, io::{self, AsyncReadExt, AsyncWriteExt}};
 
 use crate::{info_log, lyrics::Lyrics, song::SongData};
 
@@ -24,8 +25,6 @@ impl Cache {
     /// Creates a file if not existing.
     /// Only errors when [OpenOptions::open] errors.
     pub async fn read_from_file(path: &Path) -> io::Result<Self> {
-        let mut serialized = String::new();
-
         // Create all parent directories if not found.
         fs::create_dir_all(path.parent().expect("No parent directories?")).await?;
         let mut file = OpenOptions::new()
@@ -37,17 +36,10 @@ impl Cache {
 
         let mut cache = Cache::new(path.into());
 
-        match File::read_to_string(&mut file, &mut serialized).await {
-            Ok(_) => {},
-
-            // Can't read to string, but its fine, will overwrite.
-            Err(e) => {
-                info_log(format!("Error when reading: {}", e));
-                return Ok(cache)
-            },
-        };
-        let entries: Vec<CacheEntry> = match serde_json::from_str(&serialized) {
-            Ok(entries) => entries,
+        let mut buf = vec![];
+        file.read_to_end(&mut buf).await?;
+        let entries: Vec<CacheEntry> = match bincode_next::serde::decode_from_slice(&buf, config::standard()) {
+            Ok((entries, _)) => entries,
 
             // Empty or corrupted file (or just a random file), will overwrite anyways.
             Err(e) => {
@@ -55,6 +47,7 @@ impl Cache {
                 return Ok(cache)
             },
         };
+        dbg!(&entries.iter().map(|e| e.data.clone()).collect::<Vec<_>>());
 
         for entry in entries {
             cache.save_lyrics(&entry.data, &entry.lyrics, entry.occurences);
@@ -72,9 +65,10 @@ impl Cache {
             .write(true)
             .open(&self.location)
             .await?;
-        let serialized = serde_json::to_string(&entries).unwrap();
-        let mut buf = serialized.as_bytes();
-        file.write_all_buf(&mut buf).await?;
+
+        let serialized = bincode_next::serde::encode_to_vec(entries, config::standard())
+            .expect("Serialization failure");
+        file.write_all(&serialized).await?;
         
         Ok(())
     }
