@@ -47,7 +47,6 @@ impl Cache {
                 return Ok(cache)
             },
         };
-        dbg!(&entries.iter().map(|e| e.data.clone()).collect::<Vec<_>>());
 
         for entry in entries {
             cache.save_lyrics(&entry.data, &entry.lyrics, entry.occurences);
