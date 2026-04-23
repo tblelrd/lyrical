@@ -1,24 +1,4 @@
-use std::time::Duration;
-
-use futures::{StreamExt, stream};
-use reqwest::Url;
-use serde_json::Value;
-
-use crate::{command, info_log, lyrics::Lyrics};
-
-const BASE_URL: &str = "https://lrclib.net/api/";
-
-/// Maximum duration difference for lyrics to be considered.
-const MAX_DEVIATION: f64 = 1.;
-
-/// Maximum number of concurrent requests (This doesn't need to be above 4).
-const MAX_CONCURRENCE: usize = 4;
-
-/// How many characters can be displayed before truncated.
-const MAX_TITLE_LENGTH: usize = 25;
-
-/// How long each request waits before giving up.
-const RESPONSE_TIMEOUT: f64 = 5.0;
+use crate::{command, lyrics::Lyrics};
 
 /// Stores the metadata and the lyrics
 #[derive(Clone, Debug)]
@@ -28,72 +8,8 @@ pub struct Song {
 }
 
 impl Song {
-    /// Creates a song object using the song metadata.
-    /// The lyrics will be [None] if couldn't find.
-    pub async fn request_song(data: SongData) -> Song {
-        info_log(format!("Requesting {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
-
-        let mut stream = Box::pin(stream::iter((0..=3).into_iter())
-            .map(|i| data.request_lyrics(i))
-            // Concurrently request those lyrics.
-            .buffer_unordered(MAX_CONCURRENCE)
-            .filter_map(|choices| async move {
-                let choices = choices?;
-                let Some(duration) = data.duration else { return Some(choices) };
-
-                // Only allow a max deviation of duration.
-                let choices: Vec<Lyrics> = choices
-                    .into_iter()
-                    .filter(|l| (l.duration - duration).abs() < MAX_DEVIATION)
-                    .collect();
-
-                Some(choices)
-            })
-            .filter(|v| {
-                let empty = v.is_empty();
-                async move { !empty }
-            }));
-
-        let mut choices: Vec<Lyrics> = vec![];
-        let mut timeout = Box::pin(tokio::time::sleep(Duration::from_secs_f64(RESPONSE_TIMEOUT)));
-
-        loop {
-            tokio::select! {
-                n = stream.next() => {
-                    let Some(mut n) = n else {
-                        // No more responses.
-                        break;
-                    };
-                    choices.append(&mut n);
-                },
-                // Timeout and at least one response.
-                _ = (&mut timeout) => if !choices.is_empty() {
-                    info_log("Timed out, only some lyrics found");
-                    break;
-                }
-            }
-        }
-
-        // Don't need this anymore.
-        drop(stream);
-
-        if choices.is_empty() {
-            info_log(format!("Couldn't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
-            return Song {
-                data,
-                lyrics: None,
-            }
-        }
-
-        info_log(format!("{} Lyrics Found", choices.len()));
-
-        // Sort lyrics by closest duration.
-        if let Some(duration) = data.duration {
-            choices.sort_by(|a, b| (a.duration - duration).abs().total_cmp(&(b.duration - duration).abs()));
-        }
-
-        // Pick the lyrics with the lowest duration
-        let lyrics = choices.into_iter().nth(0);
+    /// Constructor for [Song].
+    pub fn new(data: SongData, lyrics: Option<Lyrics>) -> Self {
         Song {
             data,
             lyrics,
@@ -104,10 +20,10 @@ impl Song {
 /// Data about the song, can be gathered from playerctl.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongData {
-    title: String,
-    artist: Option<String>,
-    album: Option<String>,
-    duration: Option<f64>,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration: Option<f64>,
     pub player: Option<Player>,
 }
 
@@ -143,7 +59,7 @@ impl SongData {
     }
 
     /// Gets the title of the song with a max size.
-    fn get_title_truncated(&self, max_length: usize) -> String {
+    pub fn get_title_truncated(&self, max_length: usize) -> String {
         if self.title.len() <= max_length {
             self.title.clone()
         } else {
@@ -180,80 +96,5 @@ impl SongData {
             duration,
             player,
         })
-    }
-
-    /// Request and parse lyrics from the website.
-    async fn request_lyrics(&self, precision: u8) -> Option<Vec<Lyrics>> {
-        let request = self.format_request(precision);
-
-        // Don't spend forever waiting for lyrics.
-        let res = reqwest::get(request).await.ok()?;
-
-        let body = res.text().await.ok()?;
-        let json: Value = serde_json::from_str(&body).ok()?;
-
-        if json.is_array() {
-            let lyrics: Vec<Lyrics> = json.as_array()?
-                .iter()
-                .filter_map(|json| Lyrics::from_json(json))
-                .collect();
-
-            Some(lyrics)
-        } else {
-            Lyrics::from_json(&json).map(|l| vec![l])
-        }
-    }
-
-    /// Format the request with variable precision.
-    /// Most precise at 0,
-    /// Least precise at 3.
-    fn format_request(&self, precision: u8) -> Url {
-        let precise =
-            precision == 0 &&
-            self.artist.is_some() &&
-            self.album.is_some() &&
-            self.duration.is_some();
-
-        let mut attributes =
-            self.artist.is_some() as u8 +
-            self.album.is_some() as u8 +
-            self.duration.is_some() as u8;
-
-        // Reduce by precision.
-        attributes -= precision.min(attributes);
-
-        // Don't use duration when imprecise.
-        if !precise && attributes == 3 { attributes -= 1}
-
-        let mut url = Url::parse(BASE_URL).expect("Invalid url??");
-        url.set_path(if precise {
-            "api/get"
-        } else {
-            "api/search"
-        });
-        url.query_pairs_mut()
-            .append_pair("track_name", &self.title);
-
-        let add_pair = |precision: &mut u8, url: &mut Url, key: &str, value: &str| {
-            if *precision <= 0 { return }
-            *precision -= 1;
-
-            url.query_pairs_mut().append_pair(key, value);
-        };
-
-
-        if let Some(artist) = &self.artist {
-            add_pair(&mut attributes, &mut url, "artist_name", artist);
-        }
-
-        if let Some(album) = &self.album {
-            add_pair(&mut attributes, &mut url, "album_name", album);
-        }
-
-        if let Some(duration) = &self.duration {
-            add_pair(&mut attributes, &mut url, "duration", &duration.to_string());
-        }
-
-        url
     }
 }

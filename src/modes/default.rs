@@ -2,7 +2,7 @@ use anyhow::Result;
 use futures::future::OptionFuture;
 use std::{thread, time::Duration};
 
-use crate::{get_position, lyrics::Language, song::{Song, SongData}};
+use crate::{fetchers, get_position, lyrics::Language, song::{Song, SongData}};
 
 pub const UPDATE_PERIOD: f64 = 0.1f64;
 
@@ -53,7 +53,10 @@ pub async fn run_default(dont_romanize: Vec<Language>) -> Result<()> {
         } {
             // Requests the song if exists, or None if no data.
             song = OptionFuture::from(
-                data.map(|data| Song::request_song(data)),
+                data.map(|data| async {
+                    let lyrics = fetchers::fetch_all(&data).await;
+                    Song::new(data, lyrics)
+                }),
             ).await;
 
             if let Some(song) = &song {

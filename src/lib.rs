@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::{process::Command, sync::atomic::{AtomicBool, Ordering}};
 
+pub mod fetchers;
 pub mod lyrics;
 pub mod modes;
 pub mod song;
