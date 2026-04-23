@@ -70,7 +70,7 @@ pub struct Cli {
     pub hide_info_log: bool,
 
     /// The directory that stores the cache file(s).
-    /// This is $XDG_CACHE_HOME by default.
+    /// This is $XDG_CACHE_HOME or $HOME/.cache by default.
     #[arg(short, long)]
     pub cache_dir: Option<PathBuf>,
 }
