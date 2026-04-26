@@ -14,7 +14,7 @@ No AI was used for the creation of this program!
 
 - Automatically romanizes chinese, japanese, and korean lyrics.
   (Can be toggled per language, see [usage section](#usage))
-- Caching (grows infinitely as of right now, will fix very soon)
+- Caching. (Max number of elements can be changed)
 
 ## Demo Image
 
