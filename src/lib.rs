@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{path::PathBuf, process::Command, sync::atomic::{AtomicBool, Ordering}};
+use std::{path::PathBuf, process::Command, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 pub mod cache;
 pub mod fetchers;
@@ -10,6 +10,7 @@ pub mod song;
 use crate::{lyrics::Language, song::{Player, get_flag_from_player}};
 
 pub static SHOW_INFO: AtomicBool = AtomicBool::new(true);
+pub static MAX_SIZE: AtomicUsize = AtomicUsize::new(0);
 
 pub fn info_log(message: impl ToString) {
     if SHOW_INFO.load(Ordering::Relaxed) {
@@ -73,4 +74,11 @@ pub struct Cli {
     /// This is $XDG_CACHE_HOME or $HOME/.cache by default.
     #[arg(short, long)]
     pub cache_dir: Option<PathBuf>,
+
+    /// Maximum number of cache entries in the cache.
+    ///
+    /// Each entry is usually 2KiB and the default is 500.
+    /// So, the default max cache size is around 1MiB.
+    #[arg(short, long, default_value = "500")]
+    pub max_items: usize
 }

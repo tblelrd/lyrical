@@ -1,4 +1,6 @@
-use crate::{cache::Cache, fetchers::lrclib::Lrclib, info_log, lyrics::Lyrics, song::SongData};
+use std::sync::atomic::Ordering;
+
+use crate::{MAX_SIZE, cache::Cache, fetchers::lrclib::Lrclib, info_log, lyrics::Lyrics, song::SongData};
 
 pub mod lrclib;
 
@@ -28,13 +30,17 @@ pub async fn fetch_all(data: &SongData, cache: &mut Cache) -> Option<Lyrics> {
     info_log(format!("Found {} lyrics", choices.len()));
 
     let lyrics = choices.into_iter().nth(0);
-    cache.save_lyrics(data, &lyrics, 0);
+    cache.save_lyrics(data, &lyrics, 1);
 
-    // Print save errors
-    match cache.save_to_file().await {
+    // Save 
+    match cache.clone().save_to_file().await {
         Ok(_) => {},
         Err(e) => info_log(format!("Error saving cache: {}", e)),
     };
+
+    // Reload cache (This is also quite bad, it would be better
+    // just to remove what we need, so this is temporary)
+    *cache = Cache::read_from_file(&cache.location, MAX_SIZE.load(Ordering::Relaxed)).await.unwrap();
 
     lyrics
 }

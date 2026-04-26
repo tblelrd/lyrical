@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::{collections::{BinaryHeap, HashMap}, path::{Path, PathBuf}, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 use bincode_next::config;
 use serde::{Deserialize, Serialize};
@@ -10,13 +10,17 @@ use crate::{info_log, lyrics::Lyrics, song::SongData};
 #[derive(Clone, Debug)]
 pub struct Cache {
     map: HashMap<String, Vec<CacheEntry>>,
-    location: PathBuf,
+    pub location: PathBuf,
+
+    /// Max number of entries when saving.
+    max_size: usize,
 }
 
 impl Cache {
-    fn new(location: PathBuf) -> Cache {
+    fn new(location: PathBuf, max_size: usize) -> Cache {
         Cache {
             map: HashMap::new(),
+            max_size,
             location,
         }
     }
@@ -24,7 +28,7 @@ impl Cache {
     /// Reads the cache in that file, if theres a problem, will just generate an empty cache.
     /// Creates a file if not existing.
     /// Only errors when [OpenOptions::open] errors.
-    pub async fn read_from_file(path: &Path) -> io::Result<Self> {
+    pub async fn read_from_file(path: &Path, max_size: usize) -> io::Result<Self> {
         // Create all parent directories if not found.
         fs::create_dir_all(path.parent().expect("No parent directories?")).await?;
         let mut file = OpenOptions::new()
@@ -34,7 +38,7 @@ impl Cache {
             .open(path)
             .await?;
 
-        let mut cache = Cache::new(path.into());
+        let mut cache = Cache::new(path.into(), max_size);
 
         let mut buf = vec![];
         file.read_to_end(&mut buf).await?;
@@ -55,18 +59,28 @@ impl Cache {
         Ok(cache)
     }
 
-    /// Saves the cache.
+    /// Saves the cache with max length.
     /// Errors when unable to open the cache file (doesn't create a new one).
     /// Also errors when error with [AsyncWriteExt::write_all_buf].
-    pub async fn save_to_file(&self) -> io::Result<()> {
-        let entries = Into::<Vec<CacheEntry>>::into(self.clone());
-        let mut file = OpenOptions::new()
-            .write(true)
-            .open(&self.location)
-            .await?;
+    ///
+    /// This is really inefficient, as it loops like 2 or 3 times through the
+    /// whole array just to get the sorted list of entries. Then loops again to
+    /// to serialize.
+    pub async fn save_to_file(self) -> io::Result<()> {
+        let location = self.location.clone();
+        let max_size = self.max_size;
+
+        let entries = Into::<Vec<CacheEntry>>::into(self);
+        let take = max_size.min(entries.len());
+        let entries = entries.into_iter().take(take).collect::<Vec<_>>();
 
         let serialized = bincode_next::serde::encode_to_vec(entries, config::standard())
             .expect("Serialization failure");
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .open(&location)
+            .await?;
         file.write_all(&serialized).await?;
         
         Ok(())
@@ -146,25 +160,67 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct CacheEntry {
     occurences: usize,
+    timestamp: Duration,
     data: SongData,
     lyrics: Option<Lyrics>,
 }
+
+impl PartialEq for CacheEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.occurences == other.occurences && self.timestamp == other.timestamp
+    }
+}
+
+impl Eq for CacheEntry {}
+
+/// Implementing this for binary heap.
+/// Reversed because we take the first n items.
+///
+/// Last elements should be the lowest occurence (least played)
+/// and timestamp (oldest).
+impl Ord for CacheEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.occurences.cmp(&other.occurences) {
+            std::cmp::Ordering::Equal => {},
+            ord => return ord.reverse(),
+        }
+
+        self.timestamp.cmp(&other.timestamp).reverse()
+    }
+}
+
+impl PartialOrd for CacheEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 
 impl CacheEntry {
     fn new(data: SongData, lyrics: Option<Lyrics>, occurences: usize) -> CacheEntry {
         CacheEntry {
             occurences,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Timestamp should be past epoch."),
             data,
             lyrics,
         }
     }
 }
 
-impl From<Cache> for Vec<CacheEntry> {
+impl From<Cache> for BinaryHeap<CacheEntry> {
     fn from(value: Cache) -> Self {
         value.map.into_iter()
-            .map(|(_, b)| b)
+            .map(|(_, v)| v)
             .flatten()
             .collect()
+    }
+}
+
+impl From<Cache> for Vec<CacheEntry> {
+    fn from(value: Cache) -> Self {
+        Into::<BinaryHeap<CacheEntry>>::into(value)
+            .into_sorted_vec()
     }
 }

@@ -78,9 +78,6 @@ impl Fetcher for Lrclib {
             }
         }
 
-        // Don't need this anymore.
-        drop(race);
-
         if choices.is_empty() {
             info_log(format!("Couldn't retrieve lyrics for {}", data.get_title_truncated(MAX_TITLE_LENGTH)));
             return None;
