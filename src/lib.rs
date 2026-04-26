@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{path::PathBuf, process::Command, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
+use std::{path::PathBuf, process::Command, sync::atomic::{AtomicBool, Ordering}};
 
 pub mod cache;
 pub mod fetchers;
