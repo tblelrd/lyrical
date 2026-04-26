@@ -10,7 +10,6 @@ pub mod song;
 use crate::{lyrics::Language, song::{Player, get_flag_from_player}};
 
 pub static SHOW_INFO: AtomicBool = AtomicBool::new(true);
-pub static MAX_SIZE: AtomicUsize = AtomicUsize::new(0);
 
 pub fn info_log(message: impl ToString) {
     if SHOW_INFO.load(Ordering::Relaxed) {

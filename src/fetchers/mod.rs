@@ -1,6 +1,4 @@
-use std::sync::atomic::Ordering;
-
-use crate::{MAX_SIZE, cache::Cache, fetchers::lrclib::Lrclib, info_log, lyrics::Lyrics, song::SongData};
+use crate::{cache::Cache, fetchers::lrclib::Lrclib, info_log, lyrics::Lyrics, song::SongData};
 
 pub mod lrclib;
 
@@ -40,7 +38,7 @@ pub async fn fetch_all(data: &SongData, cache: &mut Cache) -> Option<Lyrics> {
 
     // Reload cache (This is also quite bad, it would be better
     // just to remove what we need, so this is temporary)
-    *cache = Cache::read_from_file(&cache.location, MAX_SIZE.load(Ordering::Relaxed)).await.unwrap();
+    *cache = Cache::read_from_file(&cache.location, cache.max_size).await.unwrap();
 
     lyrics
 }

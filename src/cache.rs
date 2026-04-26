@@ -13,7 +13,7 @@ pub struct Cache {
     pub location: PathBuf,
 
     /// Max number of entries when saving.
-    max_size: usize,
+    pub max_size: usize,
 }
 
 impl Cache {
