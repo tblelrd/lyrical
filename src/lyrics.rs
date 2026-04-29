@@ -4,6 +4,8 @@ use kakasi::IsJapanese;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::fetchers::lrclib::convert_lrc;
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, ValueEnum, PartialEq)]
 /// Languages currently supported to be romanized.
 pub enum Language {
@@ -38,22 +40,12 @@ pub struct Lyrics {
 
 impl Lyrics {
     /// Creates a [Lyrics] object from
-    /// a [Value] json object using the
-    /// `syncedLyrics` attribute.
-    pub fn from_json(object: &Value) -> Option<Lyrics> {
+    /// a json response [Value] from LRCLIB.net
+    /// using the `syncedLyrics` attribute.
+    pub fn from_lrc_json(object: &Value) -> Option<Lyrics> {
         let synced = object["syncedLyrics"].as_str()?.to_string();
 
-        let timestamped: Vec<(f64, String)> = synced
-            .split('\n')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            // Map into an option of a tuple.
-            // The ? syntax will propogate the None up into the full option
-            // so instead of (Option<f32>, String) it will be Option<(f32, String)>
-            .map(|s| Some((get_time_from_string(&s[..10])?, s[10..].trim().to_string())))
-            // The turbofish is to tell collect to use the option implementation rather than the
-            // default vec<> collect method.
-            .collect::<Option<_>>()?;
+        let timestamped: Vec<(f64, String)> = convert_lrc(synced)?;
 
         let duration = object["duration"].as_f64()?;
 
@@ -95,17 +87,4 @@ fn get_language_from_text(lyrics: &str) -> Language {
             }
         },
     }
-}
-
-/// Expects a string slice that is in the format
-/// of `[mm:ss:xx]` where mm is minutes, ss is seconds
-/// and xx is milliseconds.
-fn get_time_from_string(time: &str) -> Option<f64> {
-    let minutes: f64 = time[1..3].parse().ok()?;
-    let seconds: f64 = time[4..6].parse().ok()?;
-    let milliseconds: f64 = time[7..9].parse().ok()?;
-
-    Some(
-        (minutes * 60.) + (seconds) + (milliseconds / 100.)
-    )
 }

@@ -108,11 +108,79 @@ async fn request_and_parse(request: Url) -> Option<Vec<Lyrics>> {
     if json.is_array() {
         let lyrics: Vec<Lyrics> = json.as_array()?
             .iter()
-            .filter_map(|json| Lyrics::from_json(json))
+            .filter_map(|json| Lyrics::from_lrc_json(json))
             .collect();
 
         Some(lyrics)
     } else {
-        Lyrics::from_json(&json).map(|l| vec![l])
+        Lyrics::from_lrc_json(&json).map(|l| vec![l])
+    }
+}
+
+/// Converts LRC formatted lyrics to the timestamped lyrics tuple
+pub fn convert_lrc(unformatted: String) -> Option<Vec<(f64, String)>> {
+    unformatted.split('\n')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            get_timestamp(s)
+        })
+        // Ignore non timestamp tags.
+        .filter(|s| match s {
+            // s.as_ref().is_some_and(|(t, _)| *t > 0.)
+            Some((t, _)) => *t > 0.,
+            None => true,
+        })
+        .collect()
+}
+
+/// Is [None] when:
+/// - no tag with non-empty line
+/// - should stop parsing.
+/// Is Some((-1, line)) when:
+/// - Should be ignored
+/// Is Some((n, line)) where n > 0 when:
+/// - valid timestamp, should keep
+fn get_timestamp(line: String) -> Option<(f64, String)> {
+    // If theres no tag, then there's no timestamp.
+    let (Some(tag), line) = split_on_tag(&line) else {
+        if line.is_empty() { return None } else { return Some((-1., line)) }
+    };
+
+    let Some((minutes, seconds, milliseconds)): Option<(f64, f64, f64)> = tag.split_once(':')
+        .and_then(|(minutes, rest)| rest
+            .split_once('.')
+            .and_then(
+                |(seconds, milliseconds)| Some((
+                    minutes.parse().ok()?,
+                    seconds.parse().ok()?,
+                    milliseconds.parse().ok()?,
+                )),
+            )
+        )
+    else {
+        // Non timestamp tag, should ignore
+        return Some((-1., line));
+    };
+
+    Some(((minutes * 60.) + (seconds) + (milliseconds / 100.), line))
+}
+
+/// Takes a string in format
+/// `"[X]Y"` and returns
+/// `(Option<X>], Y)`
+fn split_on_tag(line: &str) -> (Option<String>, String){
+    let line = line.trim();
+
+    if line.starts_with('[') {
+        match line.split_once(']') {
+            Some((tag, line)) => (
+                tag.strip_prefix('[').map(|s| s.to_string()),
+                line.trim().to_string(),
+            ),
+            None => (None, line.to_string()),
+        }
+    } else {
+        (None, line.to_string())
     }
 }
