@@ -79,5 +79,9 @@ pub struct Cli {
     /// Each entry is usually 2KiB and the default is 500.
     /// So, the default max cache size is around 1MiB.
     #[arg(short, long, default_value = "500")]
-    pub max_items: usize
+    pub max_items: usize,
+
+    /// Latency in seconds
+    #[arg(short, long, default_value = "0")]
+    pub latency: f64
 }
