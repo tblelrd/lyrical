@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     let cache = Cache::read_from_file(cache_path, cli.max_items).await?;
 
-    run_default(cli.dont_romanize, cache).await?;
+    run_default(cli.dont_romanize, cli.latency, cache).await?;
 
     Ok(())
 }
