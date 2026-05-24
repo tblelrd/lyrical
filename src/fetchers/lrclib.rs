@@ -31,7 +31,11 @@ impl Fetcher for Lrclib {
         // An imprecise search
         let mut url_search = Url::parse(BASE_URL).unwrap();
         url_search.set_path("api/search");
-        url_search.query_pairs_mut().append_pair("q", &data.title);
+        url_search.query_pairs_mut().append_pair("q", &format!(
+            "{} {}",
+            data.title,
+            data.artist.as_ref().map_or("", |s| s),
+        ).trim());
 
         // Request them at the same time.
         let race = stream::iter(vec![

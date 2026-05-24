@@ -23,8 +23,8 @@ No AI was used for the creation of this program!
 # Installation
 
 ~~Make sure you have `playerctl` in your `$PATH`.~~
-Version `0.5.0` and onward no longer rely on `playerctl`, and use
-the `mpris` crate instead.
+
+Version `0.5.0` and onward no longer rely on `playerctl`. (No separate installation required!)
 
 ## Cargo (crates.io)
 
