@@ -1,8 +1,9 @@
 use anyhow::Result;
 use futures::future::OptionFuture;
+use mpris::PlayerFinder;
 use std::{thread, time::Duration};
 
-use crate::{cache::Cache, fetchers, get_position, lyrics::Language, song::{Song, SongData}, to_pinyin};
+use crate::{cache::Cache, fetchers, lyrics::Language, song::{Song, SongData}, to_pinyin};
 
 pub const UPDATE_PERIOD: f64 = 0.1f64;
 
@@ -10,13 +11,28 @@ pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Resu
     // Initialize chinese to pinyin map
     mandarin_to_pinyin::init_map(None).expect("Cant be bothered catching this one");
 
+    let player_finder = PlayerFinder::new()
+        .expect("Could not connect to D-Bus");
+
     // let mut metadata: Option<Metadata> = None;
     let mut song: Option<Song> = None;
     let mut previous_line = "".to_string();
     loop {
         thread::sleep(Duration::from_secs_f64(UPDATE_PERIOD));
 
-        let data = SongData::get_data();
+        let players = player_finder.find_all()
+            .expect("D-Bus Error when finding players.");
+
+        let Some(player) = players.into_iter().reduce(|acc, e| {
+            match (acc.bus_name(), e.bus_name()) {
+                // Prioritise spotify
+                ("spotify", _) => acc,
+                (_, "spotify") => e,
+                (_, _) => acc,
+            }
+        }) else { continue };
+
+        let data = SongData::get_data(&player);
         if match (&data, &song) {
             // True if metadata and lyrics exist and are different
             // e.g. changing songs
@@ -53,7 +69,9 @@ pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Resu
         let Some(song) = &song else { continue; };
         let Some(lyrics) = &song.lyrics else { continue; };
 
-        let line = lyrics.get_line_at_time(get_position(&song.data.player));
+        let position = player.get_position().map_or(0., |d| d.as_secs_f64());
+        let line = lyrics.get_line_at_time(position);
+
         if line == previous_line { continue }
         previous_line = line.to_string();
 
