@@ -22,8 +22,9 @@ No AI was used for the creation of this program!
 
 # Installation
 
-Make sure you have `playerctl` in your `$PATH`.
-(The package to install is usually just called `playerctl`).
+~~Make sure you have `playerctl` in your `$PATH`.~~
+
+Versions `0.5.0` and onward no longer rely on `playerctl`. (No separate installation required!)
 
 ## Cargo (crates.io)
 
