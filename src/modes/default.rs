@@ -7,7 +7,10 @@ use crate::{cache::Cache, fetchers, lyrics::Language, song::{Song, SongData}, to
 
 pub const UPDATE_PERIOD: f64 = 0.1f64;
 
-pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Result<()> {
+pub async fn run_default(
+    dont_romanize: Vec<Language>,
+    latency: f64,
+    mut cache: Cache) -> Result<()> {
     // Initialize chinese to pinyin map
     mandarin_to_pinyin::init_map(None).expect("Cant be bothered catching this one");
 
@@ -70,7 +73,7 @@ pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Resu
         let Some(lyrics) = &song.lyrics else { continue; };
 
         let position = player.get_position().map_or(0., |d| d.as_secs_f64());
-        let line = lyrics.get_line_at_time(position);
+        let line = lyrics.get_line_at_time(position + latency);
 
         if line == previous_line { continue }
         previous_line = line.to_string();
