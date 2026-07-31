@@ -9,6 +9,8 @@ pub mod song;
 
 use crate::lyrics::Language;
 
+pub const LYRICAL_GITHUB_REPO: &str = "https://github.com/tblelrd/lyrical";
+
 pub static SHOW_INFO: AtomicBool = AtomicBool::new(true);
 
 pub fn info_log(message: impl ToString) {

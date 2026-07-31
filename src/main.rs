@@ -1,12 +1,25 @@
 use anyhow::Result;
 use clap::Parser;
+use reqwest::Client;
 use std::{path::PathBuf, sync::atomic::Ordering};
 
-use lyrical::{Cli, SHOW_INFO, cache::Cache, modes::default::run_default};
+use lyrical::{Cli, SHOW_INFO, cache::Cache, fetchers::lrclib_new::LRCClient, modes::default::run_default};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    let client = Client::new();
+
+    let lrc = LRCClient::new(client.clone());
+    lrc.request_search(
+        "堕天 - Date",
+        // "Creepy Nut",
+        // "アンサンブル・プレイ",
+        // "172",
+    ).await;
+
+    panic!();
 
     let cache_dir = cli.cache_dir.unwrap_or(
         std::env::var_os("XDG_CACHE_HOME")

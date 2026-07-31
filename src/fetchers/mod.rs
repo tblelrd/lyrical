@@ -1,6 +1,7 @@
 use crate::{cache::Cache, fetchers::lrclib::Lrclib, info_log, lyrics::Lyrics, song::SongData};
 
 pub mod lrclib;
+pub mod lrclib_new;
 
 /// How many characters can be displayed before truncated.
 const MAX_TITLE_LENGTH: usize = 25;
