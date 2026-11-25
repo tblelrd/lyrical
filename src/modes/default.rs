@@ -24,7 +24,7 @@ pub async fn run_default(dont_romanize: Vec<Language>, mut cache: Cache) -> Resu
             .expect("D-Bus Error when finding players.");
 
         let Some(player) = players.into_iter().reduce(|acc, e| {
-            match (acc.bus_name(), e.bus_name()) {
+            match (acc.bus_name_trimmed(), e.bus_name_trimmed()) {
                 // Prioritise spotify
                 ("spotify", _) => acc,
                 (_, "spotify") => e,
