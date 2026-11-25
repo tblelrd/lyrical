@@ -12,12 +12,14 @@ async fn main() -> Result<()> {
     let client = Client::new();
 
     let lrc = LRCClient::new(client.clone());
-    lrc.request_search(
-        "堕天 - Date",
+    let stuff = lrc.request_search(
+        "堕天",
         // "Creepy Nut",
         // "アンサンブル・プレイ",
         // "172",
     ).await;
+
+    dbg!(stuff);
 
     panic!();
 

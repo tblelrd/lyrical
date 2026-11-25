@@ -1,6 +1,7 @@
-use reqwest::{Client, Method, Request, RequestBuilder, Response, Url, header::USER_AGENT};
-
-use crate::{LYRICAL_GITHUB_REPO, song::SongData};
+use crate::LYRICAL_GITHUB_REPO;
+use futures::future::OptionFuture;
+use reqwest::{Client, Url, header::USER_AGENT};
+use serde_json::Value;
 
 const BASE_URL: &str = "https://lrclib.net";
 
@@ -34,7 +35,7 @@ impl LRCClient {
         artist_name: &str,
         album_name: &str,
         duration: &str,
-    ) {
+    ) -> Option<Value> {
         let mut url = Url::parse(&format!("{}/api/get", self.lrc_url)).unwrap();
         url.query_pairs_mut()
             .append_pair("track_name", track_name)
@@ -42,27 +43,30 @@ impl LRCClient {
             .append_pair("album_name", album_name)
             .append_pair("duration", duration);
 
-        let res = self.client.get(url)
-            .header(USER_AGENT, &self.user_agent)
-            .send().await;
-
-        dbg!(res);
+        self.request_url(url).await
    }
 
     pub async fn request_search(
         &self,
         query: &str,
-    ) {
+    ) -> Option<Value> {
         let mut url = Url::parse(&format!("{}/api/search", self.lrc_url)).unwrap();
         url.query_pairs_mut()
             .append_pair("q", query);
 
-        dbg!(&url.to_string());
+        self.request_url(url).await
+    }
 
-        let res = self.client.get(url)
-            .header(USER_AGENT, &self.user_agent)
-            .send().await;
-
-        dbg!(res);
+    async fn request_url(&self, url: Url) -> Option<Value> {
+        Into::<OptionFuture<_>>::into(
+            self.client.get(url)
+                .header(USER_AGENT, &self.user_agent)
+                .send()
+                .await
+                .ok()
+                .map(|res| async { res.text().await }),
+        ).await
+            .and_then(|res| res.ok())
+            .and_then(|text| serde_json::from_str(&text).ok())
     }
 }
